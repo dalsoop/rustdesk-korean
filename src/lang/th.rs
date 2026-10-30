@@ -787,6 +787,19 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("The Korean/English key reaches the remote side either way.", ""),
         ("Input Monitoring: allowed", ""),
         ("Input Monitoring: not allowed, so Input source 2 (RustDesk window keys only) is in use. Allow it, then restart RustDesk.", ""),
-        ("Open Input Monitoring settings", "")
+        ("Open Input Monitoring settings", ""),
+        ("Korean/English key: switches the remote Mac's input source", ""),
+        ("Korean/English key: sent as the Windows Korean/English key", ""),
+        ("Korean/English key: sent as the Linux Hangul key", ""),
+        ("Korean/English key: sent as the Hangul key (legacy mode)", ""),
+        ("Korean/English key: sent unchanged", ""),
+        ("Korean/English key: sent unchanged (turned off in Settings)", ""),
+        ("Send all keys", ""),
+        ("Send this window's keys only", ""),
+        ("Keys: all, including system shortcuts", ""),
+        ("Keys: only those typed in this window", ""),
+        ("keyboard-mode-map-tip", ""),
+        ("keyboard-mode-translate-tip", ""),
+        ("keyboard-mode-legacy-tip", ""),
     ].iter().cloned().collect();
 }

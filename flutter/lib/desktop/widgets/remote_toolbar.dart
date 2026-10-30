@@ -2553,6 +2553,8 @@ class _KeyboardMenu extends StatelessWidget {
         color: _ToolbarTheme.blueColor,
         hoverColor: _ToolbarTheme.hoverBlueColor,
         menuChildrenGetter: (_) => [
+              keyboardStatus(),
+              Divider(),
               keyboardMode(),
               localKeyboardType(),
               inputSource(),
@@ -2583,6 +2585,43 @@ class _KeyboardMenu extends StatelessWidget {
       }
     }
     return speedWidgets;
+  }
+
+  /// What the 한/영 key and the other keys do right now, so the choices below
+  /// do not have to be read as "mode 1 / mode 2".
+  keyboardStatus() {
+    // The web client has neither hangul_key.rs in its key path nor a rdev grab.
+    if (isWeb) return Offstage();
+    return futureBuilder(future: () async {
+      return await bind.sessionGetKeyboardMode(sessionId: ffi.sessionId) ??
+          kKeyLegacyMode;
+    }(), hasData: (data) {
+      const style = TextStyle(fontSize: 12, color: Colors.grey);
+      final lines = [_kbHangulStatus(data as String, pi.platform)];
+      if (_kbHasInputSourceChoice()) {
+        lines.add(isInputSourceFlutter
+            ? 'Keys: only those typed in this window'
+            : 'Keys: all, including system shortcuts');
+      }
+      return SizedBox(
+        width: 380,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: lines.map((l) => Text(translate(l), style: style)).toList(),
+          ),
+        ),
+      );
+    });
+  }
+
+  bool _kbHasInputSourceChoice() {
+    try {
+      return (jsonDecode(bind.mainSupportedInputSource()) as List).length > 1;
+    } catch (_) {
+      return false;
+    }
   }
 
   keyboardMode() {
@@ -2636,8 +2675,23 @@ class _KeyboardMenu extends StatelessWidget {
         if (mode.key == kKeyTranslateMode) {
           text = '$text beta';
         }
+        final tip = _kKeyboardModeTips[mode.key];
         list.add(RdoMenuButton<String>(
-          child: Text(text),
+          child: tip == null
+              ? Text(text)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(text),
+                    SizedBox(
+                      width: 360,
+                      child: Text(translate(tip),
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey)),
+                    ),
+                  ],
+                ),
           value: mode.key,
           groupValue: groupValue,
           onChanged: enabled ? onChanged : null,
@@ -2688,12 +2742,12 @@ class _KeyboardMenu extends StatelessWidget {
       final subtitle = isMacOS ? _kMacInputSourceSubtitles[d[0] as String] : null;
       return RdoMenuButton<String>(
         child: subtitle == null
-            ? Text(translate(d[1] as String))
+            ? Text(translate((isWeb ? null : _kInputSourceTitles[d[0] as String]) ?? d[1] as String))
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(translate(d[1] as String)),
+                  Text(translate((isWeb ? null : _kInputSourceTitles[d[0] as String]) ?? d[1] as String)),
                   SizedBox(
                     width: 360,
                     child: Text(translate(subtitle),
@@ -3842,6 +3896,48 @@ class _MinimizedMonitorSwitchButton extends StatelessWidget {
         ),
       );
     });
+  }
+}
+
+// What each input source does, shown instead of "Input source 1/2". The stored
+// option values stay "Input source 1/2".
+const _kInputSourceTitles = {
+  'Input source 1': 'Send all keys',
+  'Input source 2': "Send this window's keys only",
+};
+
+const _kKeyboardModeTips = {
+  kKeyMapMode: 'keyboard-mode-map-tip',
+  kKeyTranslateMode: 'keyboard-mode-translate-tip',
+  kKeyLegacyMode: 'keyboard-mode-legacy-tip',
+};
+
+// Mirrors src/hangul_key.rs `target()`: what the local 한/영 key becomes for
+// this peer.
+String _kbHangulStatus(String keyboardMode, String peerPlatform) {
+  if (!mainGetLocalBoolOptionSync(kOptionEnablePeerHangulKey)) {
+    return 'Korean/English key: sent unchanged (turned off in Settings)';
+  }
+  // Other peers (Android, iOS, web) get the key unchanged: peer_os() is None.
+  if (![kPeerPlatformMacOS, kPeerPlatformWindows, kPeerPlatformLinux]
+      .contains(peerPlatform)) {
+    return 'Korean/English key: sent unchanged';
+  }
+  final sameOs = (isWindows && peerPlatform == kPeerPlatformWindows) ||
+      (isLinux && peerPlatform == kPeerPlatformLinux);
+  if (sameOs) return 'Korean/English key: sent unchanged';
+  if (keyboardMode == kKeyLegacyMode) {
+    return 'Korean/English key: sent as the Hangul key (legacy mode)';
+  }
+  switch (peerPlatform) {
+    case kPeerPlatformMacOS:
+      return "Korean/English key: switches the remote Mac's input source";
+    case kPeerPlatformWindows:
+      return 'Korean/English key: sent as the Windows Korean/English key';
+    case kPeerPlatformLinux:
+      return 'Korean/English key: sent as the Linux Hangul key';
+    default:
+      return 'Korean/English key: sent unchanged';
   }
 }
 
