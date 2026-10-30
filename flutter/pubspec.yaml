@@ -20,7 +20,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # Android versionCode, macOS CFBundleVersion and the Windows file version grow
 # with every ko release. This line is the only place to bump; see KOREAN.md
 # "Releasing".
-version: 1.5.0+6809
+version: 1.5.0+6810
 
 environment:
   sdk: '^3.1.0'
