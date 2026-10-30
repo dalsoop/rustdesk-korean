@@ -1,9 +1,11 @@
 //! Korean/English input-source switching for keys that come from a remote peer.
 //!
-//! macOS only runs input-source hotkeys (e.g. Caps Lock remapped to F18 and bound
-//! to "Select the previous input source") for hardware events, so the synthetic
-//! key RustDesk posts never switches 한/영. Keys that mean "switch Korean/English"
-//! are taken out of the input stream here and switch the input source through TIS.
+//! macOS matches input-source hotkeys (e.g. Caps Lock remapped to F18 and bound
+//! to "Select the previous input source") at the HID level, and the keys RustDesk
+//! simulates go in at the session tap, so they never switch 한/영. Keys that mean
+//! "switch Korean/English" are taken out of the input stream here and switch the
+//! input source: by posting this Mac's own shortcut at the HID tap, or through TIS
+//! when that shortcut is off.
 
 use base::message_proto::{key_event, ControlKey, KeyEvent, KeyboardMode};
 use std::sync::Mutex;

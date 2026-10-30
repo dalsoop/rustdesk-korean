@@ -936,9 +936,10 @@ static TISInputSourceRef CopyEnabledKoreanInputSource() {
     return found;
 }
 
-// macOS drops input-source hotkeys that arrive as synthetic events, so a remote
-// Korean/English key has to switch the input source through TIS. Returns false
-// when there is nothing to switch to (no Korean input source enabled).
+// Switches Korean/English through TIS: the fallback for a remote Korean/English
+// key when this Mac's input-source shortcut is off. The frontmost app may pick
+// the change up only at its next activation. Returns false when there is nothing
+// to switch to (no Korean input source enabled).
 extern "C" bool MacToggleKoreanInputSource() {
     TISInputSourceRef current = TISCopyCurrentKeyboardInputSource();
     if (!current) {
@@ -968,13 +969,15 @@ extern "C" bool MacPostHotKey(uint16_t keycode, uint64_t flags) {
         return false;
     }
     CGEventFlags before = CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState);
-    bool posted = true;
+    // True once the key-down is out: the switch has happened, and TIS must not
+    // switch a second time even if the key-up could not be created.
+    bool posted = false;
     for (int i = 0; i < 2; i++) {
         CGEventRef event = CGEventCreateKeyboardEvent(source, keycode, i == 0);
         if (!event) {
-            posted = false;
             break;
         }
+        posted = true;
         CGEventSetFlags(event, (CGEventFlags)flags);
         CGEventPost(kCGHIDEventTap, event);
         CFRelease(event);
