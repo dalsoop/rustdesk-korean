@@ -2590,13 +2590,15 @@ class _KeyboardMenu extends StatelessWidget {
   /// What the 한/영 key and the other keys do right now, so the choices below
   /// do not have to be read as "mode 1 / mode 2".
   keyboardStatus() {
+    // The web client has neither hangul_key.rs in its key path nor a rdev grab.
+    if (isWeb) return Offstage();
     return futureBuilder(future: () async {
       return await bind.sessionGetKeyboardMode(sessionId: ffi.sessionId) ??
           kKeyLegacyMode;
     }(), hasData: (data) {
       const style = TextStyle(fontSize: 12, color: Colors.grey);
       final lines = [_kbHangulStatus(data as String, pi.platform)];
-      if (isDesktop && _kbHasInputSourceChoice()) {
+      if (_kbHasInputSourceChoice()) {
         lines.add(isInputSourceFlutter
             ? 'Keys: only those typed in this window'
             : 'Keys: all, including system shortcuts');
@@ -2740,12 +2742,12 @@ class _KeyboardMenu extends StatelessWidget {
       final subtitle = isMacOS ? _kMacInputSourceSubtitles[d[0] as String] : null;
       return RdoMenuButton<String>(
         child: subtitle == null
-            ? Text(translate(_kInputSourceTitles[d[0] as String] ?? d[1] as String))
+            ? Text(translate((isWeb ? null : _kInputSourceTitles[d[0] as String]) ?? d[1] as String))
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(translate(_kInputSourceTitles[d[0] as String] ?? d[1] as String)),
+                  Text(translate((isWeb ? null : _kInputSourceTitles[d[0] as String]) ?? d[1] as String)),
                   SizedBox(
                     width: 360,
                     child: Text(translate(subtitle),
@@ -3915,6 +3917,11 @@ const _kKeyboardModeTips = {
 String _kbHangulStatus(String keyboardMode, String peerPlatform) {
   if (!mainGetLocalBoolOptionSync(kOptionEnablePeerHangulKey)) {
     return 'Korean/English key: sent unchanged (turned off in Settings)';
+  }
+  // Other peers (Android, iOS, web) get the key unchanged: peer_os() is None.
+  if (![kPeerPlatformMacOS, kPeerPlatformWindows, kPeerPlatformLinux]
+      .contains(peerPlatform)) {
+    return 'Korean/English key: sent unchanged';
   }
   final sameOs = (isWindows && peerPlatform == kPeerPlatformWindows) ||
       (isLinux && peerPlatform == kPeerPlatformLinux);
