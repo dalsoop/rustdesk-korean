@@ -787,6 +787,19 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("The Korean/English key reaches the remote side either way.", "한/영 키는 두 방식 모두 원격으로 갑니다."),
         ("Input Monitoring: allowed", "입력 모니터링 권한: 있음"),
         ("Input Monitoring: not allowed, so Input source 2 (RustDesk window keys only) is in use. Allow it, then restart RustDesk.", "입력 모니터링 권한: 없음 — 그래서 입력 소스 2(RustDesk 창 키만 전달)로 동작합니다. 권한을 준 뒤 RustDesk 를 다시 시작하세요."),
-        ("Open Input Monitoring settings", "입력 모니터링 설정 열기")
+        ("Open Input Monitoring settings", "입력 모니터링 설정 열기"),
+        ("Korean/English key: switches the remote Mac's input source", "한/영 키: 원격 맥의 입력 소스를 바꿈"),
+        ("Korean/English key: sent as the Windows Korean/English key", "한/영 키: 윈도우의 한/영 키로 보냄"),
+        ("Korean/English key: sent as the Linux Hangul key", "한/영 키: 리눅스의 Hangul 키로 보냄"),
+        ("Korean/English key: sent as the Hangul key (legacy mode)", "한/영 키: Hangul 키로 보냄(레거시 모드)"),
+        ("Korean/English key: sent unchanged", "한/영 키: 그대로 보냄"),
+        ("Korean/English key: sent unchanged (turned off in Settings)", "한/영 키: 그대로 보냄(설정에서 꺼 둠)"),
+        ("Send all keys", "모든 키 보내기"),
+        ("Send this window's keys only", "이 창의 키만 보내기"),
+        ("Keys: all, including system shortcuts", "키 전달: 모든 키(시스템 단축키 포함)"),
+        ("Keys: only those typed in this window", "키 전달: 이 창에서 친 키만"),
+        ("keyboard-mode-map-tip", "권장 · 키 위치를 보내고, 글자는 원격 컴퓨터의 입력기가 만듦"),
+        ("keyboard-mode-translate-tip", "이 컴퓨터가 만든 글자를 보냄 · 두 컴퓨터의 자판 배열이 다를 때"),
+        ("keyboard-mode-legacy-tip", "예전 방식 · 호환용"),
     ].iter().cloned().collect();
 }
