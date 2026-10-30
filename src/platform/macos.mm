@@ -956,6 +956,41 @@ extern "C" bool MacToggleKoreanInputSource() {
     return status == noErr;
 }
 
+// Presses an input-source shortcut (virtual keycode + modifier flags exactly as
+// com.apple.symbolichotkeys stores them) at the HID level, where the window
+// server matches symbolic hotkeys, so the frontmost app switches the input
+// source in its own event order. Keys simulated at the session tap never reach
+// that matching. The HID modifier state is put back afterwards: F keys carry
+// SecondaryFn, which would otherwise stay set for the following keys.
+extern "C" bool MacPostHotKey(uint16_t keycode, uint64_t flags) {
+    CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+    if (!source) {
+        return false;
+    }
+    CGEventFlags before = CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState);
+    bool posted = true;
+    for (int i = 0; i < 2; i++) {
+        CGEventRef event = CGEventCreateKeyboardEvent(source, keycode, i == 0);
+        if (!event) {
+            posted = false;
+            break;
+        }
+        CGEventSetFlags(event, (CGEventFlags)flags);
+        CGEventPost(kCGHIDEventTap, event);
+        CFRelease(event);
+        [NSThread sleepForTimeInterval:0.02];
+    }
+    CGEventRef restore = CGEventCreateKeyboardEvent(source, kVK_Function, false);
+    if (restore) {
+        CGEventSetType(restore, kCGEventFlagsChanged);
+        CGEventSetFlags(restore, before);
+        CGEventPost(kCGHIDEventTap, restore);
+        CFRelease(restore);
+    }
+    CFRelease(source);
+    return posted;
+}
+
 // Reads AppleSymbolicHotKeys[hotKey] from com.apple.symbolichotkeys. Writes the
 // enabled flag (1, 0, or -1 when missing) and up to maxParams of
 // value.parameters, and returns how many parameters the entry has: -3 when the
