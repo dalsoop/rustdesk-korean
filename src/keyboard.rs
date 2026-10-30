@@ -351,6 +351,8 @@ pub mod client {
                 return;
             };
             log::debug!("[grab] input source 2: releasing grab of 0x{:x}", owner);
+            #[cfg(windows)]
+            rdev::set_get_key_unicode(false);
             gs.last_grab = None;
             gs.deferred_pending = false;
             #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
