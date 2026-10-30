@@ -168,6 +168,12 @@ pub mod client {
         #[cfg(target_os = "linux")]
         let mut disable_after_unlock = false;
         let mut gs = GRAB_STATE.lock().unwrap();
+        // Input source 2 may have been chosen while this call waited for the
+        // lock. A `Run` let through here would keep the grab hooked for good.
+        #[cfg(feature = "flutter")]
+        if !IS_RDEV_ENABLED.load(Ordering::SeqCst) {
+            return;
+        }
         match state {
             GrabState::Ready => {}
             GrabState::Run => {
@@ -330,6 +336,38 @@ pub mod client {
         if let Some(to_release) = release_after_unlock {
             release_remote_keys_for_events(keyboard_mode, to_release);
         }
+    }
+
+    /// Releases the rdev grab once input source 2 has turned it off. The
+    /// switch runs on a worker thread while the window may still send a `Run`
+    /// with input source 1 cached; that window would otherwise keep owning
+    /// the grab, and the tap would keep taking every key press.
+    #[cfg(feature = "flutter")]
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    pub fn release_grab_after_rdev_disabled(keyboard_mode: &str) {
+        let to_release = {
+            let mut gs = GRAB_STATE.lock().unwrap();
+            let Some(owner) = gs.owner.take() else {
+                return;
+            };
+            log::debug!("[grab] input source 2: releasing grab of 0x{:x}", owner);
+            #[cfg(windows)]
+            rdev::set_get_key_unicode(false);
+            gs.last_grab = None;
+            gs.deferred_pending = false;
+            #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+            KEYBOARD_HOOKED.store(false, Ordering::SeqCst);
+            #[cfg(target_os = "macos")]
+            crate::platform::macos_input_source::set_remote_keyboard_active(
+                owner,
+                false,
+                "input source 2",
+            );
+            take_remote_keys()
+        };
+        #[cfg(target_os = "linux")]
+        disable_grab_if_released();
+        release_remote_keys_for_events(keyboard_mode, to_release);
     }
 
     pub fn process_event(keyboard_mode: &str, event: &Event, lock_modes: Option<i32>) {
@@ -1672,6 +1710,10 @@ pub mod input_source {
             // No need to stop grab loop.
             crate::flutter_ffi::session_enter_or_leave(session_id, false);
             super::IS_RDEV_ENABLED.store(false, super::Ordering::SeqCst);
+            let keyboard_mode = crate::flutter::sessions::get_session_by_session_id(&session_id)
+                .map(|session| session.get_keyboard_mode())
+                .unwrap_or_default();
+            super::client::release_grab_after_rdev_disabled(&keyboard_mode);
         }
         set_local_option(CONFIG_OPTION_INPUT_SOURCE.to_string(), input_source);
     }
