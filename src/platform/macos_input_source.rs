@@ -1,9 +1,11 @@
 //! Korean/English input-source switching for keys that come from a remote peer.
 //!
-//! macOS only runs input-source hotkeys (e.g. Caps Lock remapped to F18 and bound
-//! to "Select the previous input source") for hardware events, so the synthetic
-//! key RustDesk posts never switches 한/영. Keys that mean "switch Korean/English"
-//! are taken out of the input stream here and switch the input source through TIS.
+//! macOS matches input-source hotkeys (e.g. Caps Lock remapped to F18 and bound
+//! to "Select the previous input source") at the HID level, and the keys RustDesk
+//! simulates go in at the session tap, so they never switch 한/영. Keys that mean
+//! "switch Korean/English" are taken out of the input stream here and switch the
+//! input source: by posting this Mac's own shortcut at the HID tap, or through TIS
+//! when that shortcut is off.
 
 use base::message_proto::{key_event, ControlKey, KeyEvent, KeyboardMode};
 use std::sync::Mutex;
@@ -13,8 +15,12 @@ static SWALLOWED_KEYS: Mutex<Vec<ToggleKey>> = Mutex::new(Vec::new());
 /// Symbolic hotkeys "Select the previous / next input source" (F18 for 한/영).
 const INPUT_SOURCE_HOTKEYS: [i32; 2] = [60, 61];
 
+/// "Select the previous input source", the shortcut a Mac uses for 한/영.
+const PREVIOUS_INPUT_SOURCE_HOTKEY: i32 = 60;
+
 extern "C" {
     fn MacToggleKoreanInputSource() -> bool;
+    fn MacPostHotKey(keycode: u16, flags: u64) -> bool;
     fn MacReadSymbolicHotKey(
         hot_key: i32,
         enabled: *mut i32,
@@ -84,7 +90,7 @@ pub fn handle_toggle_key(evt: &KeyEvent) -> bool {
     if !Config::get_bool_option(OPTION_ENABLE_INPUT_SOURCE_TOGGLE) {
         return false;
     }
-    if !unsafe { MacToggleKoreanInputSource() } {
+    if !switch_input_source() {
         hbb_common::throttled_log!(
             std::time::Duration::from_secs(60),
             warn,
@@ -100,6 +106,49 @@ pub fn handle_toggle_key(evt: &KeyEvent) -> bool {
         key
     );
     true
+}
+
+/// Switches the way this Mac's own 한/영 shortcut does. `TISSelectInputSource`
+/// from this background process reaches the frontmost app only at its next
+/// activation or switch, so keys typed right after 한/영 kept the old input
+/// source. The shortcut posted at the HID level is handled by the frontmost
+/// app in event order. TIS stays the fallback when the shortcut is off, or
+/// paused because a remote window of this Mac's own RustDesk has the keyboard.
+fn switch_input_source() -> bool {
+    if unsafe { CGSIsSymbolicHotKeyEnabled(PREVIOUS_INPUT_SOURCE_HOTKEY) } {
+        if let Some((keycode, flags)) =
+            hotkey_to_post(read_symbolic_hotkey(PREVIOUS_INPUT_SOURCE_HOTKEY))
+        {
+            if unsafe { MacPostHotKey(keycode, flags) } {
+                return true;
+            }
+        }
+    }
+    unsafe { MacToggleKoreanInputSource() }
+}
+
+/// The keycode and modifier flags to post for the "previous input source"
+/// shortcut, or `None` when it is off or malformed. The modifier mask is kept
+/// whole: an F key shortcut includes SecondaryFn, and the window server does
+/// not match F18 without it.
+fn hotkey_to_post(entry: crate::hangul_key::SymbolicHotkeyEntry) -> Option<(u16, u64)> {
+    const KVK_SPACE: u16 = 49;
+    const CONTROL: u64 = 1 << 18;
+    let Some((enabled, params)) = entry else {
+        // No entry: macOS uses its default, ⌃Space.
+        return Some((KVK_SPACE, CONTROL));
+    };
+    if enabled != Some(true) {
+        return None;
+    }
+    let params = params?;
+    let [_, keycode, mask] = params.as_slice() else {
+        return None;
+    };
+    if !(0..=0x7f).contains(keycode) || *mask < 0 {
+        return None;
+    }
+    Some((*keycode as u16, *mask as u64))
 }
 
 /// Forgets held toggle keys whose key-up will never come (peer disconnected).
@@ -305,6 +354,27 @@ mod tests {
             key_event::Union::ControlKey(ControlKey::Hangul.into()),
         );
         assert_eq!(toggle_key(&evt), Some(ToggleKey::Hangul));
+    }
+
+    #[test]
+    fn previous_input_source_shortcut_is_posted_as_stored() {
+        // Caps Lock remapped to F18 and bound to "Select the previous input
+        // source": F18 with SecondaryFn, which the window server requires.
+        let f18 = Some((Some(true), Some(vec![65535, 79, 0x80_0000])));
+        assert_eq!(hotkey_to_post(f18), Some((79, 0x80_0000)));
+        // ⌃⌥Space as stored by System Settings.
+        let ctrl_alt_space = Some((Some(true), Some(vec![32, 49, 0xC_0000])));
+        assert_eq!(hotkey_to_post(ctrl_alt_space), Some((49, 0xC_0000)));
+        // Never changed: macOS uses ⌃Space.
+        assert_eq!(hotkey_to_post(None), Some((49, 0x4_0000)));
+    }
+
+    #[test]
+    fn switched_off_or_unset_shortcut_falls_back_to_tis() {
+        let off = Some((Some(false), Some(vec![65535, 79, 0x80_0000])));
+        assert_eq!(hotkey_to_post(off), None);
+        let unset = Some((Some(true), Some(vec![65535, 65535, 0])));
+        assert_eq!(hotkey_to_post(unset), None);
     }
 
     #[test]

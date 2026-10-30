@@ -936,9 +936,10 @@ static TISInputSourceRef CopyEnabledKoreanInputSource() {
     return found;
 }
 
-// macOS drops input-source hotkeys that arrive as synthetic events, so a remote
-// Korean/English key has to switch the input source through TIS. Returns false
-// when there is nothing to switch to (no Korean input source enabled).
+// Switches Korean/English through TIS: the fallback for a remote Korean/English
+// key when this Mac's input-source shortcut is off. The frontmost app may pick
+// the change up only at its next activation. Returns false when there is nothing
+// to switch to (no Korean input source enabled).
 extern "C" bool MacToggleKoreanInputSource() {
     TISInputSourceRef current = TISCopyCurrentKeyboardInputSource();
     if (!current) {
@@ -954,6 +955,43 @@ extern "C" bool MacToggleKoreanInputSource() {
     OSStatus status = TISSelectInputSource(target);
     CFRelease(target);
     return status == noErr;
+}
+
+// Presses an input-source shortcut (virtual keycode + modifier flags exactly as
+// com.apple.symbolichotkeys stores them) at the HID level, where the window
+// server matches symbolic hotkeys, so the frontmost app switches the input
+// source in its own event order. Keys simulated at the session tap never reach
+// that matching. The HID modifier state is put back afterwards: F keys carry
+// SecondaryFn, which would otherwise stay set for the following keys.
+extern "C" bool MacPostHotKey(uint16_t keycode, uint64_t flags) {
+    CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
+    if (!source) {
+        return false;
+    }
+    CGEventFlags before = CGEventSourceFlagsState(kCGEventSourceStateHIDSystemState);
+    // True once the key-down is out: the switch has happened, and TIS must not
+    // switch a second time even if the key-up could not be created.
+    bool posted = false;
+    for (int i = 0; i < 2; i++) {
+        CGEventRef event = CGEventCreateKeyboardEvent(source, keycode, i == 0);
+        if (!event) {
+            break;
+        }
+        posted = true;
+        CGEventSetFlags(event, (CGEventFlags)flags);
+        CGEventPost(kCGHIDEventTap, event);
+        CFRelease(event);
+        [NSThread sleepForTimeInterval:0.02];
+    }
+    CGEventRef restore = CGEventCreateKeyboardEvent(source, kVK_Function, false);
+    if (restore) {
+        CGEventSetType(restore, kCGEventFlagsChanged);
+        CGEventSetFlags(restore, before);
+        CGEventPost(kCGHIDEventTap, restore);
+        CFRelease(restore);
+    }
+    CFRelease(source);
+    return posted;
 }
 
 // Reads AppleSymbolicHotKeys[hotKey] from com.apple.symbolichotkeys. Writes the
