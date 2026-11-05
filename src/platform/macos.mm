@@ -1023,3 +1023,38 @@ extern "C" int MacReadSymbolicHotKey(int hotKey, int *enabled, long long *params
         return n;
     }
 }
+
+#include <dlfcn.h>
+
+// HIToolbox exports these without a header. They answer the way the system
+// does, defaults included: com.apple.HIToolbox has no TISRomanSwitchState or
+// AppleFnUsageType until the user changes the setting. Looked up at run time
+// so that a macOS without them reports "unreadable" instead of failing to load.
+typedef Boolean (*MacTISBoolFn)(void);
+typedef int (*MacTISIntFn)(void);
+
+// "Use the Caps Lock key to switch to and from ABC": 1 on, 0 off, -1 unreadable.
+extern "C" int MacReadCapsLockSwitch() {
+    MacTISBoolFn enabled = (MacTISBoolFn)dlsym(RTLD_DEFAULT, "TISIsRomanSwitchEnabled");
+    MacTISBoolFn allowed = (MacTISBoolFn)dlsym(RTLD_DEFAULT, "TISIsRomanSwitchAllowed");
+    if (!enabled || !allowed) {
+        return -1;
+    }
+    return enabled() && allowed() ? 1 : 0;
+}
+
+// "Press 🌐 key to": 0 Do Nothing, 1 Change Input Source, 2 Show Emoji &
+// Symbols, 3 Start Dictation; -1 unreadable.
+extern "C" int MacReadFnUsageType() {
+    MacTISIntFn usage = (MacTISIntFn)dlsym(RTLD_DEFAULT, "TISGetFnUsageType");
+    if (!usage) {
+        return -1;
+    }
+    int value = usage();
+    return value < 0 ? -1 : value;
+}
+
+// Whether Caps Lock is physically down, as the HID system sees it.
+extern "C" bool MacIsCapsLockKeyDown() {
+    return CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, kVK_CapsLock);
+}
