@@ -2073,3 +2073,49 @@ fn get_bundle_id() -> Option<String> {
         Some(bundle_id_str)
     }
 }
+
+#[cfg(test)]
+mod hotkey_flags_tests {
+    extern "C" {
+        fn MacFlagsAfterHotKey(before: u64, hotkey_flags: u64, held: u64) -> u64;
+    }
+
+    const BASE: u64 = 0x2000_0000;
+    const SHIFT: u64 = 1 << 17;
+    const CONTROL: u64 = 1 << 18;
+    const FN: u64 = 1 << 23;
+
+    fn after(before: u64, hotkey_flags: u64, held: u64) -> u64 {
+        unsafe { MacFlagsAfterHotKey(before, hotkey_flags, held) }
+    }
+
+    #[test]
+    fn a_clean_state_stays_clean() {
+        assert_eq!(after(BASE, FN, 0), BASE);
+    }
+
+    #[test]
+    fn fn_left_by_a_previous_shortcut_is_cleared() {
+        // Back-to-back switches read `before` while the previous F18+Fn is
+        // still in effect; putting it back kept Fn set for good.
+        assert_eq!(after(BASE | FN, FN, 0), BASE);
+        assert_eq!(after(BASE | FN, CONTROL, 0), BASE);
+    }
+
+    #[test]
+    fn a_physically_held_fn_is_kept() {
+        assert_eq!(after(BASE, FN, FN), BASE | FN);
+        assert_eq!(after(BASE | FN, FN, FN), BASE | FN);
+    }
+
+    #[test]
+    fn the_shortcuts_own_modifiers_follow_the_keys() {
+        assert_eq!(after(BASE | CONTROL, CONTROL, 0), BASE);
+        assert_eq!(after(BASE | CONTROL, CONTROL, CONTROL), BASE | CONTROL);
+    }
+
+    #[test]
+    fn other_modifiers_are_put_back() {
+        assert_eq!(after(BASE | SHIFT, FN, 0), BASE | SHIFT);
+    }
+}
