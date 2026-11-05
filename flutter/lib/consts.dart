@@ -13,6 +13,18 @@ const int kMainWindowId = 0;
 
 const kAllDisplayValue = -1;
 
+// Korean fork: updates follow this fork's releases, see src/fork_update.rs.
+const kForkLatestReleaseUrl =
+    'https://github.com/dalsoop/rustdesk-korean/releases/latest';
+const kForkReleaseTagUrlPrefix =
+    'https://github.com/dalsoop/rustdesk-korean/releases/tag/';
+
+/// The fork's page of the new release, or its latest release page.
+String forkReleasePageUrl(String updateUrl) =>
+    updateUrl.startsWith(kForkReleaseTagUrlPrefix)
+        ? updateUrl
+        : kForkLatestReleaseUrl;
+
 const kKeyLegacyMode = 'legacy';
 const kKeyMapMode = 'map';
 const kKeyTranslateMode = 'translate';

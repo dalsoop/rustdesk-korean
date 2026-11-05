@@ -376,8 +376,9 @@ pub fn get_update_download_file_from_url(url: &str) -> Option<PathBuf> {
     let tag = segments.next()?;
     let filename = segments.next()?;
 
-    if owner != "rustdesk"
-        || repo != "rustdesk"
+    // Korean fork: only this fork's release assets, never upstream's.
+    if owner != crate::fork_update::REPO_OWNER
+        || repo != crate::fork_update::REPO_NAME
         || releases != "releases"
         || download != "download"
         || tag.is_empty()
@@ -544,6 +545,13 @@ pub fn check_update_as_root() -> ResultType<bool> {
         log::info!("[root-update] Custom client detected, skipping stock update.");
         return Ok(false);
     }
+    if !crate::fork_update::HAS_MACOS_UPDATE_DMG {
+        log::info!(
+            "[root-update] Korean fork releases have no .dmg for this installer, skipping. \
+             New versions are shown as a link to the release page."
+        );
+        return Ok(false);
+    }
     // Clean up only old temp dirs from previous failed updates. The detached
     // installer keeps using its update directory after this process exits and
     // releases the advisory lock, so a newly-started daemon must not remove a
@@ -662,29 +670,49 @@ mod tests {
     #[test]
     fn update_download_file_accepts_expected_github_asset_urls() {
         let file = get_download_file_from_url(
-            "https://github.com/rustdesk/rustdesk/releases/download/1.4.0/rustdesk-1.4.0-x86_64.dmg",
+            "https://github.com/dalsoop/rustdesk-korean/releases/download/1.5.0-ko.11/rustdesk-1.5.0-ko.11-x86_64.exe",
         )
         .expect("valid GitHub release asset URL");
 
         assert_eq!(
             file.file_name().and_then(|name| name.to_str()),
-            Some("rustdesk-1.4.0-x86_64.dmg")
+            Some("rustdesk-1.5.0-ko.11-x86_64.exe")
         );
+    }
+
+    #[test]
+    fn update_download_url_follows_fork_release_page() {
+        // Same derivation as `check_update()` and `handleUpdate()`.
+        let update_url = "https://github.com/dalsoop/rustdesk-korean/releases/tag/1.5.0-ko.11";
+        let download_url = update_url.replace("tag", "download");
+        let version = download_url.split('/').last().unwrap_or_default();
+        assert_eq!(version, "1.5.0-ko.11");
+        for ext in ["exe", "msi"] {
+            let url = format!("{}/rustdesk-{}-{}.{}", download_url, version, "x86_64", ext);
+            assert_eq!(
+                url,
+                format!(
+                    "https://github.com/dalsoop/rustdesk-korean/releases/download/1.5.0-ko.11/rustdesk-1.5.0-ko.11-x86_64.{ext}"
+                )
+            );
+            assert!(get_download_file_from_url(&url).is_some(), "{url}");
+        }
     }
 
     #[test]
     fn update_download_file_rejects_untrusted_or_malformed_urls() {
         for url in [
-            "http://github.com/rustdesk/rustdesk/releases/download/1/rustdesk.exe",
+            "https://github.com/rustdesk/rustdesk/releases/download/1.4.0/rustdesk-1.4.0-x86_64.exe",
+            "http://github.com/dalsoop/rustdesk-korean/releases/download/1/rustdesk.exe",
             "https://example.com/rustdesk.exe",
             "https://github.com/other/project/releases/download/1/rustdesk.exe",
-            "https://github.com/rustdesk/rustdesk/releases/download/1/",
-            "https://github.com/rustdesk/rustdesk/releases/download/1/nested/rustdesk.exe",
-            "https://github.com/rustdesk/rustdesk/releases/download/1/C:rustdesk.exe",
-            "https://user@github.com/rustdesk/rustdesk/releases/download/1/rustdesk.exe",
-            "https://github.com:443/rustdesk/rustdesk/releases/download/1/rustdesk.exe",
-            "https://github.com/rustdesk/rustdesk/releases/download/1/rustdesk.exe?download=1",
-            "https://github.com/rustdesk/rustdesk/releases/download/1/rustdesk.exe#download",
+            "https://github.com/dalsoop/rustdesk-korean/releases/download/1/",
+            "https://github.com/dalsoop/rustdesk-korean/releases/download/1/nested/rustdesk.exe",
+            "https://github.com/dalsoop/rustdesk-korean/releases/download/1/C:rustdesk.exe",
+            "https://user@github.com/dalsoop/rustdesk-korean/releases/download/1/rustdesk.exe",
+            "https://github.com:443/dalsoop/rustdesk-korean/releases/download/1/rustdesk.exe",
+            "https://github.com/dalsoop/rustdesk-korean/releases/download/1/rustdesk.exe?download=1",
+            "https://github.com/dalsoop/rustdesk-korean/releases/download/1/rustdesk.exe#download",
             "not a url",
         ] {
             assert!(get_download_file_from_url(url).is_none(), "{url}");
