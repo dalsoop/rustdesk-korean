@@ -85,8 +85,26 @@ fn install_android_deps() {
     println!("cargo:rustc-link-lib=OpenSLES");
 }
 
+#[path = "src/fork_update.rs"]
+mod fork_update;
+
+// Korean fork: the fork release number for update checks comes from the
+// flutter/pubspec.yaml build number, the one place each release bumps.
+fn emit_ko_release() {
+    let pubspec = "flutter/pubspec.yaml";
+    let ko = std::fs::read_to_string(pubspec)
+        .ok()
+        .and_then(|s| fork_update::ko_release_from_pubspec(&s));
+    if let Some(ko) = ko {
+        println!("cargo:rustc-env=RUSTDESK_KO_RELEASE={}", ko);
+    }
+    println!("cargo:rerun-if-changed={}", pubspec);
+    println!("cargo:rerun-if-changed=src/fork_update.rs");
+}
+
 fn main() {
     hbb_common::gen_version();
+    emit_ko_release();
     install_android_deps();
     #[cfg(all(windows, feature = "inline"))]
     build_manifest();
