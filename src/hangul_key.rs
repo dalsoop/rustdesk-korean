@@ -794,6 +794,47 @@ fn mac_key_events<E>(
     Some(events)
 }
 
+/// The lines Settings shows under the 한/영 option: the keys used as 한/영
+/// now, then what the user should know about them. `tr` translates a fixed
+/// phrase; key names ("⌃Space", "Caps Lock", "🌐") stay as they are.
+pub fn settings_status_lines(
+    enabled: bool,
+    display: &LocalHangulKeyDisplay,
+    tr: impl Fn(&str) -> String,
+) -> Vec<String> {
+    let heading = tr("Keys used as Korean/English now:");
+    if !enabled {
+        return vec![format!("{} {}", heading, tr("Off"))];
+    }
+    let mut lines = vec![format!("{} {}", heading, display.names.join(", "))];
+    if display.names.iter().any(|n| n == "Caps Lock" || n == "🌐") {
+        lines.push(tr("Caps Lock and 🌐 may switch this Mac's input source too."));
+    }
+    if !display.unreadable.is_empty() {
+        let names: Vec<String> = display
+            .unreadable
+            .iter()
+            .map(|s| match s {
+                MacKeySetting::CapsLockSwitch => tr("Caps Lock switching"),
+                MacKeySetting::GlobeKeyAction => tr("🌐 key action"),
+            })
+            .collect();
+        lines.push(format!("{} {}", tr("Could not read:"), names.join(", ")));
+    }
+    lines
+}
+
+/// [`settings_status_lines`] for this computer, read now and translated.
+pub fn settings_status_lines_now() -> Vec<String> {
+    let enabled = option_enabled();
+    let display = if enabled {
+        local_hangul_keys_for_display()
+    } else {
+        LocalHangulKeyDisplay::default()
+    };
+    settings_status_lines(enabled, &display, |s| crate::lang::translate(s.to_owned()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1458,5 +1499,69 @@ mod tests {
         key_event.mode = KeyboardMode::Map.into();
         let up = convert(Os::Windows, "macos", 0x72, 0x15, false, &key_event);
         assert_eq!(up.map(|e| (e.down, e.chr())), Some((false, 79)));
+    }
+}
+
+#[cfg(test)]
+mod settings_status_tests {
+    use super::*;
+
+    fn tr(s: &str) -> String {
+        format!("<{s}>")
+    }
+
+    fn display(names: &[&str], unreadable: Vec<MacKeySetting>) -> LocalHangulKeyDisplay {
+        LocalHangulKeyDisplay {
+            names: names.iter().map(|n| n.to_string()).collect(),
+            unreadable,
+        }
+    }
+
+    #[test]
+    fn off_shows_only_off() {
+        let d = display(&["⌃Space", "Caps Lock", "LANG1"], vec![MacKeySetting::GlobeKeyAction]);
+        assert_eq!(
+            settings_status_lines(false, &d, tr),
+            vec!["<Keys used as Korean/English now:> <Off>"]
+        );
+    }
+
+    #[test]
+    fn shortcut_and_lang1_only() {
+        let d = display(&["⌃Space", "LANG1"], vec![]);
+        assert_eq!(
+            settings_status_lines(true, &d, tr),
+            vec!["<Keys used as Korean/English now:> ⌃Space, LANG1"]
+        );
+    }
+
+    #[test]
+    fn caps_lock_or_globe_adds_the_note() {
+        for keys in [
+            &["⌃Space", "Caps Lock", "LANG1"][..],
+            &["F18", "🌐", "LANG1"][..],
+        ] {
+            let lines = settings_status_lines(true, &display(keys, vec![]), tr);
+            assert_eq!(lines.len(), 2, "{keys:?}");
+            assert_eq!(
+                lines[1],
+                "<Caps Lock and 🌐 may switch this Mac's input source too.>"
+            );
+        }
+    }
+
+    #[test]
+    fn unreadable_settings_are_listed_in_order() {
+        let d = display(
+            &["⌃Space", "LANG1"],
+            vec![MacKeySetting::CapsLockSwitch, MacKeySetting::GlobeKeyAction],
+        );
+        assert_eq!(
+            settings_status_lines(true, &d, tr),
+            vec![
+                "<Keys used as Korean/English now:> ⌃Space, LANG1".to_owned(),
+                "<Could not read:> <Caps Lock switching>, <🌐 key action>".to_owned(),
+            ]
+        );
     }
 }

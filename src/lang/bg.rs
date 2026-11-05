@@ -801,5 +801,11 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("keyboard-mode-map-tip", ""),
         ("keyboard-mode-translate-tip", ""),
         ("keyboard-mode-legacy-tip", ""),
+        ("Keys used as Korean/English now:", ""),
+        ("Off", ""),
+        ("Caps Lock and 🌐 may switch this Mac's input source too.", ""),
+        ("Could not read:", ""),
+        ("Caps Lock switching", ""),
+        ("🌐 key action", ""),
     ].iter().cloned().collect();
 }

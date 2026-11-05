@@ -801,5 +801,11 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("keyboard-mode-map-tip", "권장 · 키 위치를 보내고, 글자는 원격 컴퓨터의 입력기가 만듦"),
         ("keyboard-mode-translate-tip", "이 컴퓨터가 만든 글자를 보냄 · 두 컴퓨터의 자판 배열이 다를 때"),
         ("keyboard-mode-legacy-tip", "예전 방식 · 호환용"),
+        ("Keys used as Korean/English now:", "지금 한/영으로 쓰는 키:"),
+        ("Off", "꺼져 있음"),
+        ("Caps Lock and 🌐 may switch this Mac's input source too.", "Caps Lock·🌐는 내 맥의 입력 소스도 같이 바꿀 수 있습니다."),
+        ("Could not read:", "확인하지 못한 맥 설정:"),
+        ("Caps Lock switching", "Caps Lock 전환"),
+        ("🌐 key action", "🌐 키 동작"),
     ].iter().cloned().collect();
 }
