@@ -957,12 +957,54 @@ extern "C" bool MacToggleKoreanInputSource() {
     return status == noErr;
 }
 
+// The modifiers a posted shortcut can leave set in the HID modifier state.
+static const CGEventFlags kHotKeyModifierFlags = kCGEventFlagMaskShift | kCGEventFlagMaskControl |
+                                                 kCGEventFlagMaskAlternate | kCGEventFlagMaskCommand |
+                                                 kCGEventFlagMaskSecondaryFn;
+
+// The modifier flags to put back after posting a shortcut with `hotkeyFlags`.
+// `before` is the HID modifier state read before posting; `held` has the flag
+// of every modifier whose key is physically down now. SecondaryFn and the
+// modifiers the shortcut carried come from `held` only, never from `before`:
+// when shortcuts are posted back to back, `before` can be read while the
+// previous shortcut's flags are still in effect, and putting those back would
+// keep Fn (or ⌃) set for good. Other flags are put back as they were.
+extern "C" uint64_t MacFlagsAfterHotKey(uint64_t before, uint64_t hotkeyFlags, uint64_t held) {
+    uint64_t owned = (hotkeyFlags & kHotKeyModifierFlags) | kCGEventFlagMaskSecondaryFn;
+    return (before & ~owned) | (held & owned);
+}
+
+// The flags of the modifiers whose keys are physically down.
+static CGEventFlags HeldModifierFlags() {
+    static const struct {
+        CGEventFlags flag;
+        CGKeyCode keys[2];
+    } kModifierKeys[] = {
+        {kCGEventFlagMaskShift, {kVK_Shift, kVK_RightShift}},
+        {kCGEventFlagMaskControl, {kVK_Control, kVK_RightControl}},
+        {kCGEventFlagMaskAlternate, {kVK_Option, kVK_RightOption}},
+        {kCGEventFlagMaskCommand, {kVK_Command, kVK_RightCommand}},
+        {kCGEventFlagMaskSecondaryFn, {kVK_Function, kVK_Function}},
+    };
+    CGEventFlags held = 0;
+    for (const auto &m : kModifierKeys) {
+        for (CGKeyCode key : m.keys) {
+            if (CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, key)) {
+                held |= m.flag;
+            }
+        }
+    }
+    return held;
+}
+
 // Presses an input-source shortcut (virtual keycode + modifier flags exactly as
 // com.apple.symbolichotkeys stores them) at the HID level, where the window
 // server matches symbolic hotkeys, so the frontmost app switches the input
 // source in its own event order. Keys simulated at the session tap never reach
 // that matching. The HID modifier state is put back afterwards: F keys carry
-// SecondaryFn, which would otherwise stay set for the following keys.
+// SecondaryFn, which would otherwise stay set for the following keys. Fn and
+// the shortcut's own modifiers are put back as the keys physically are (see
+// MacFlagsAfterHotKey), so a stale Fn is cleared rather than kept.
 extern "C" bool MacPostHotKey(uint16_t keycode, uint64_t flags) {
     CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
     if (!source) {
@@ -986,7 +1028,7 @@ extern "C" bool MacPostHotKey(uint16_t keycode, uint64_t flags) {
     CGEventRef restore = CGEventCreateKeyboardEvent(source, kVK_Function, false);
     if (restore) {
         CGEventSetType(restore, kCGEventFlagsChanged);
-        CGEventSetFlags(restore, before);
+        CGEventSetFlags(restore, (CGEventFlags)MacFlagsAfterHotKey(before, flags, HeldModifierFlags()));
         CGEventPost(kCGHIDEventTap, restore);
         CFRelease(restore);
     }
@@ -1022,4 +1064,39 @@ extern "C" int MacReadSymbolicHotKey(int hotKey, int *enabled, long long *params
         }
         return n;
     }
+}
+
+#include <dlfcn.h>
+
+// HIToolbox exports these without a header. They answer the way the system
+// does, defaults included: com.apple.HIToolbox has no TISRomanSwitchState or
+// AppleFnUsageType until the user changes the setting. Looked up at run time
+// so that a macOS without them reports "unreadable" instead of failing to load.
+typedef Boolean (*MacTISBoolFn)(void);
+typedef int (*MacTISIntFn)(void);
+
+// "Use the Caps Lock key to switch to and from ABC": 1 on, 0 off, -1 unreadable.
+extern "C" int MacReadCapsLockSwitch() {
+    MacTISBoolFn enabled = (MacTISBoolFn)dlsym(RTLD_DEFAULT, "TISIsRomanSwitchEnabled");
+    MacTISBoolFn allowed = (MacTISBoolFn)dlsym(RTLD_DEFAULT, "TISIsRomanSwitchAllowed");
+    if (!enabled || !allowed) {
+        return -1;
+    }
+    return enabled() && allowed() ? 1 : 0;
+}
+
+// "Press 🌐 key to": 0 Do Nothing, 1 Change Input Source, 2 Show Emoji &
+// Symbols, 3 Start Dictation; -1 unreadable.
+extern "C" int MacReadFnUsageType() {
+    MacTISIntFn usage = (MacTISIntFn)dlsym(RTLD_DEFAULT, "TISGetFnUsageType");
+    if (!usage) {
+        return -1;
+    }
+    int value = usage();
+    return value < 0 ? -1 : value;
+}
+
+// Whether Caps Lock is physically down, as the HID system sees it.
+extern "C" bool MacIsCapsLockKeyDown() {
+    return CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, kVK_CapsLock);
 }

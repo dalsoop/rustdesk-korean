@@ -433,8 +433,26 @@ class _GeneralState extends State<_General> {
         "Send my Korean/English key as the remote computer's Korean/English key",
         kOptionEnablePeerHangulKey,
         isServer: false,
+        update: isMacOS ? (_) => setState(() {}) : null,
       ),
+      if (isMacOS) hangulKeysStatus(),
     ]);
+  }
+
+  // The keys this Mac uses as Korean/English now, read again on every build.
+  Widget hangulKeysStatus() {
+    List<dynamic> lines = [];
+    try {
+      lines = jsonDecode(bind.mainGetCommonSync(key: 'local-hangul-keys-status'));
+    } catch (_) {}
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: lines
+          .map((line) => Text(line.toString(),
+                  style: TextStyle(color: disabledTextColor(context, false)))
+              .marginOnly(left: 34, top: 2))
+          .toList(),
+    ).marginOnly(bottom: 4);
   }
 
   Widget theme() {

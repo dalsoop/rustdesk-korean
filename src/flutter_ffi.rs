@@ -2734,6 +2734,12 @@ pub fn main_get_common(key: String) -> String {
         };
         #[cfg(not(target_os = "linux"))]
         return String::new();
+    } else if key == "local-hangul-keys-status" {
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        return serde_json::to_string(&crate::hangul_key::settings_status_lines_now())
+            .unwrap_or_default();
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        return "[]".to_owned();
     } else if key == "permanent-password-set" {
         return ui_interface::is_permanent_password_set().to_string();
     } else if key == "local-permanent-password-set" {

@@ -4,7 +4,9 @@
 //! right Alt key on Korean layouts), Linux uses the Hangul key (KEY_HANGEUL or
 //! keysym Hangul), and a Mac uses whatever its "Select the previous / next input
 //! source" shortcuts are (F18 when Caps Lock is remapped, ⌃Space by default),
-//! plus the LANG1 key. Sent by position, the key arrives as something the peer's
+//! plus the LANG1 key, Caps Lock when "Use the Caps Lock key to switch to and
+//! from ABC" is on, and 🌐 tapped alone when "Press 🌐 key to" is "Change Input
+//! Source". Sent by position, the key arrives as something the peer's
 //! input method ignores, or not at all (a Mac has no keycode for Hangul). The key
 //! is replaced by the peer's own: F18 for a Mac (the host switches through TIS,
 //! see `platform::macos_input_source`), the Hangul key for Linux, and VK_HANGUL
@@ -36,6 +38,9 @@ const LOCAL_OS: Os = Os::MacOS;
 const MAC_KVK_F18: u32 = 79;
 const MAC_KVK_SPACE: u32 = 49;
 const MAC_KVK_JIS_KANA: u32 = 104;
+const MAC_KVK_CAPS_LOCK: u32 = 57;
+/// The 🌐 (Fn) key, kVK_Function.
+const MAC_KVK_FUNCTION: u32 = 63;
 const WIN_VK_HANGUL: u32 = 0x15;
 // VK_KANA shares 0x15 with VK_HANGUL; the Japanese Kana key has scancode 0x70.
 const WIN_SCANCODE_KANA: u32 = 0x70;
@@ -239,17 +244,334 @@ pub fn local_chords(hotkeys: impl IntoIterator<Item = Option<Chord>>) -> Vec<Cho
     chords
 }
 
-static LOCAL_CHORDS: Mutex<Option<Vec<Chord>>> = Mutex::new(None);
-static HELD_CHORD_KEYS: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+/// "Press 🌐 key to: Change Input Source" as `TISGetFnUsageType` reports it.
+/// The values follow the order of that menu in System Settings: 0 Do Nothing,
+/// 1 Change Input Source, 2 Show Emoji & Symbols, 3 Start Dictation.
+const FN_USAGE_CHANGE_INPUT_SOURCE: i32 = 1;
+const FN_USAGE_KNOWN: std::ops::RangeInclusive<i32> = 0..=3;
 
-/// Replaces the local 한/영 chords (macOS controller); logs when they change.
-pub fn set_local_chords(chords: Vec<Chord>) {
-    let mut current = LOCAL_CHORDS.lock().unwrap();
-    if current.as_ref() != Some(&chords) {
-        let names: Vec<String> = chords.iter().map(Chord::name).collect();
-        hbb_common::log::info!("Local 한/영 keys: {}", names.join(", "));
+/// This Mac's settings that make Caps Lock or 🌐 a 한/영 key; `None` when the
+/// setting could not be read.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MacKeySettings {
+    /// "Use the Caps Lock key to switch to and from ABC" is on.
+    pub caps_lock_switch: Option<bool>,
+    /// "Press 🌐 key to", the raw `TISGetFnUsageType` value.
+    pub fn_usage: Option<i32>,
+}
+
+/// A Mac setting that decides whether a key is 한/영 and can fail to be read.
+/// The input-source shortcuts never count as failed: a missing entry means the
+/// macOS default.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MacKeySetting {
+    /// "Use the Caps Lock key to switch to and from ABC".
+    CapsLockSwitch,
+    /// "Press 🌐 key to".
+    GlobeKeyAction,
+}
+
+impl MacKeySetting {
+    /// A stable id for the settings screen.
+    pub fn id(&self) -> &'static str {
+        match self {
+            MacKeySetting::CapsLockSwitch => "caps-lock-switch",
+            MacKeySetting::GlobeKeyAction => "globe-key-action",
+        }
     }
-    *current = Some(chords);
+}
+
+/// Every key this Mac treats as 한/영, gathered in one place so another source
+/// (such as keys the user picks) can replace the detection.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LocalHangulKeys {
+    /// The enabled input-source shortcuts, then LANG1.
+    pub chords: Vec<Chord>,
+    /// Caps Lock switches 한/영 (each press toggles once).
+    pub caps_lock: bool,
+    /// 🌐 pressed and released on its own switches 한/영.
+    pub globe: bool,
+    /// Settings that could not be read; their key does not count as 한/영.
+    pub unreadable: Vec<MacKeySetting>,
+}
+
+/// What the settings screen shows: the local 한/영 key names in order and the
+/// Mac settings that could not be read.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LocalHangulKeyDisplay {
+    /// Input-source shortcuts ("⌃Space", "F18"), "Caps Lock", "🌐", "LANG1".
+    pub names: Vec<String>,
+    pub unreadable: Vec<MacKeySetting>,
+}
+
+/// The local 한/영 keys from the input-source shortcuts and the Caps Lock and
+/// 🌐 settings.
+pub fn detect_local_hangul_keys(
+    hotkeys: impl IntoIterator<Item = Option<Chord>>,
+    settings: MacKeySettings,
+) -> LocalHangulKeys {
+    let mut unreadable = Vec::new();
+    let caps_lock = settings.caps_lock_switch.unwrap_or_else(|| {
+        unreadable.push(MacKeySetting::CapsLockSwitch);
+        false
+    });
+    let globe = match settings.fn_usage {
+        Some(usage) if FN_USAGE_KNOWN.contains(&usage) => usage == FN_USAGE_CHANGE_INPUT_SOURCE,
+        _ => {
+            unreadable.push(MacKeySetting::GlobeKeyAction);
+            false
+        }
+    };
+    LocalHangulKeys {
+        chords: local_chords(hotkeys),
+        caps_lock,
+        globe,
+        unreadable,
+    }
+}
+
+impl LocalHangulKeys {
+    /// Shortcut chords, then Caps Lock, 🌐 and LANG1, without duplicates.
+    pub fn display(&self) -> LocalHangulKeyDisplay {
+        let mut names: Vec<String> = Vec::new();
+        let shortcuts = self.chords.iter().filter(|c| **c != LANG1).map(Chord::name);
+        let others = [
+            (self.caps_lock, "Caps Lock"),
+            (self.globe, "🌐"),
+            (true, "LANG1"),
+        ]
+        .into_iter()
+        .filter(|(on, _)| *on)
+        .map(|(_, name)| name.to_owned());
+        for name in shortcuts.chain(others) {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        LocalHangulKeyDisplay {
+            names,
+            unreadable: self.unreadable.clone(),
+        }
+    }
+}
+
+/// For the settings screen: reads this Mac's settings again and returns the
+/// local 한/영 keys. Empty on Windows and Linux, whose 한/영 key is fixed.
+pub fn local_hangul_keys_for_display() -> LocalHangulKeyDisplay {
+    #[cfg(target_os = "macos")]
+    {
+        crate::platform::macos_input_source::load_local_hangul_chords();
+        if let Some(keys) = LOCAL_KEYS.lock().unwrap().as_ref() {
+            return keys.display();
+        }
+    }
+    LocalHangulKeyDisplay::default()
+}
+
+static LOCAL_KEYS: Mutex<Option<LocalHangulKeys>> = Mutex::new(None);
+static KEY_STATE: Mutex<KeyState<Event>> = Mutex::new(KeyState::new());
+/// Whether the last Caps Lock event of the grab loop came with the key down.
+static CAPS_LOCK_DOWN_SEEN: Mutex<bool> = Mutex::new(false);
+
+/// Replaces the local 한/영 keys (macOS controller); logs when they change.
+pub fn set_local_keys(keys: LocalHangulKeys) {
+    let mut current = LOCAL_KEYS.lock().unwrap();
+    if current.as_ref() != Some(&keys) {
+        let display = keys.display();
+        let unreadable: Vec<&str> = display.unreadable.iter().map(|s| s.id()).collect();
+        hbb_common::log::info!(
+            "Local 한/영 keys: {}; unreadable settings: {:?}",
+            display.names.join(", "),
+            unreadable
+        );
+    }
+    *current = Some(keys);
+}
+
+fn current_local_keys() -> LocalHangulKeys {
+    if let Some(keys) = LOCAL_KEYS.lock().unwrap().clone() {
+        return keys;
+    }
+    #[cfg(target_os = "macos")]
+    crate::platform::macos_input_source::load_local_hangul_chords();
+    LOCAL_KEYS.lock().unwrap().clone().unwrap_or_default()
+}
+
+/// The 🌐 key while it may still be a lone tap.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Globe<E> {
+    Idle,
+    /// Pressed alone; the key-down is held back until it turns out to be a tap
+    /// (released alone) or part of a combination.
+    Pending(E),
+    /// Part of a combination: its keys go to the peer as usual.
+    Combo,
+    /// The pending key-down was dropped (the remote window lost the keyboard);
+    /// its key-up is swallowed.
+    Dropped,
+}
+
+#[derive(Debug)]
+struct KeyState<E> {
+    /// Chord keys whose key-down was turned into a toggle.
+    held: Vec<u32>,
+    globe: Globe<E>,
+    /// A held-back 🌐 key-down to send before the current key.
+    to_send: Option<E>,
+}
+
+impl<E> KeyState<E> {
+    const fn new() -> Self {
+        KeyState {
+            held: Vec::new(),
+            globe: Globe::Idle,
+            to_send: None,
+        }
+    }
+
+    /// Another key or a mouse button went down while 🌐 is held: the 🌐 key-down
+    /// held back so far is due.
+    fn globe_combo(&mut self) -> Option<E> {
+        match std::mem::replace(&mut self.globe, Globe::Idle) {
+            Globe::Pending(event) => {
+                self.globe = Globe::Combo;
+                Some(event)
+            }
+            other => {
+                self.globe = other;
+                None
+            }
+        }
+    }
+
+    // A `Combo` is left as is: the 🌐 key-up that releasing the grab sends
+    // (`Key::Function` is among the keys released then) ends it.
+    fn drop_pending_globe(&mut self) -> bool {
+        if matches!(self.globe, Globe::Pending(_)) {
+            self.globe = Globe::Dropped;
+            self.to_send = None;
+            return true;
+        }
+        false
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MacKeyAction {
+    /// Not a 한/영 key: send the key as usual.
+    Pass,
+    /// Send nothing.
+    Swallow,
+    /// Send the peer's 한/영 key down or up (a chord's own key-down / key-up).
+    Toggle(bool),
+    /// Send the peer's 한/영 key down and up at once (Caps Lock, 🌐 tap).
+    Tap,
+}
+
+/// What a local key event means for the peer when the option is on and the
+/// peer has a 한/영 key. A 🌐 key-down held back until now is left in
+/// `state.to_send`.
+fn mac_key_action<E>(
+    keys: &LocalHangulKeys,
+    state: &mut KeyState<E>,
+    keycode: u32,
+    down: bool,
+    mods: Mods,
+    event: E,
+) -> MacKeyAction {
+    if keycode == MAC_KVK_FUNCTION && keys.globe {
+        return globe_action(&mut state.globe, down, mods, event);
+    }
+    if down {
+        if let Some(globe_down) = state.globe_combo() {
+            state.to_send = Some(globe_down);
+        }
+    }
+    if keycode == MAC_KVK_CAPS_LOCK && keys.caps_lock {
+        // Caps Lock may come as a key-down or a key-up per press; the Flutter
+        // key path adds a synthesized key-up to each key-down. A caller that
+        // gets lone key-ups turns them into key-downs.
+        return if down {
+            MacKeyAction::Tap
+        } else {
+            MacKeyAction::Swallow
+        };
+    }
+    match chord_action(&keys.chords, &mut state.held, keycode, down, mods) {
+        ChordAction::Pass => MacKeyAction::Pass,
+        ChordAction::Swallow => MacKeyAction::Swallow,
+        ChordAction::Toggle(down) => MacKeyAction::Toggle(down),
+    }
+}
+
+fn globe_action<E>(globe: &mut Globe<E>, down: bool, mods: Mods, event: E) -> MacKeyAction {
+    let state = std::mem::replace(globe, Globe::Idle);
+    let (next, action) = match (state, down) {
+        (Globe::Idle | Globe::Dropped, true) if mods != Mods::default() => {
+            (Globe::Combo, MacKeyAction::Pass)
+        }
+        (Globe::Idle | Globe::Dropped, true) => (Globe::Pending(event), MacKeyAction::Swallow),
+        (Globe::Pending(held), true) => (Globe::Pending(held), MacKeyAction::Swallow),
+        (Globe::Combo, true) => (Globe::Combo, MacKeyAction::Pass),
+        (Globe::Pending(_), false) => (Globe::Idle, MacKeyAction::Tap),
+        (Globe::Dropped, false) => (Globe::Idle, MacKeyAction::Swallow),
+        (Globe::Combo | Globe::Idle, false) => (Globe::Idle, MacKeyAction::Pass),
+    };
+    *globe = next;
+    action
+}
+
+/// Grab loop on a Mac: whether a Caps Lock event counts as a press. macOS may
+/// report each press as one event (key-down or key-up by Caps Lock state) or
+/// as a key-down and a key-up; `physically_down` is the key's HID state when
+/// the event arrives. A key-up right after a counted key-down is the same
+/// press.
+fn caps_lock_press_counts(down_seen: &mut bool, physically_down: bool) -> bool {
+    if physically_down {
+        *down_seen = true;
+        return true;
+    }
+    !std::mem::replace(down_seen, false)
+}
+
+/// Grab loop on a Mac: the Caps Lock event to hand to the keyboard path as a
+/// key-down when Caps Lock is a local 한/영 key for `peer`, or `None` to keep
+/// the grab loop's usual handling (Caps Lock is not sent, only its state).
+pub fn caps_lock_from_grab(peer: &str, event: &Event, physically_down: bool) -> Option<Event> {
+    let peer: String = peer
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .to_lowercase();
+    if peer_os(&peer).is_none() || !option_enabled() || !current_local_keys().caps_lock {
+        return None;
+    }
+    if !caps_lock_press_counts(&mut CAPS_LOCK_DOWN_SEEN.lock().unwrap(), physically_down) {
+        return None;
+    }
+    let mut press = event.clone();
+    press.event_type = EventType::KeyPress(rdev::Key::CapsLock);
+    Some(press)
+}
+
+/// A 🌐 key-down held back until now that must go to the peer before the
+/// current key (🌐 turned out to be part of a combination).
+pub fn take_globe_to_send() -> Option<Event> {
+    KEY_STATE.lock().unwrap().to_send.take()
+}
+
+/// A mouse button went down: a 🌐 held alone becomes a combination. Returns its
+/// key-down to send now.
+pub fn globe_combo_by_mouse() -> Option<Event> {
+    KEY_STATE.lock().unwrap().globe_combo()
+}
+
+/// The remote window lost the keyboard or another session took it: a 🌐 held
+/// back is forgotten and nothing is sent for it.
+pub fn drop_pending_globe() {
+    if KEY_STATE.lock().unwrap().drop_pending_globe() {
+        hbb_common::log::info!("Pending 🌐 key dropped: the remote window let go of the keyboard");
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -313,7 +635,38 @@ pub fn to_peer_hangul_key(
         _ => return None,
     };
     #[cfg(target_os = "macos")]
-    return mac_chord_events(peer, event, key_event, down, modifier_events);
+    {
+        let (alt, ctrl, shift, command) =
+            crate::keyboard::client::get_modifiers_state(false, false, false, false);
+        let mods = Mods {
+            ctrl,
+            alt,
+            shift,
+            command,
+        };
+        peer_os(peer)?;
+        let enabled = option_enabled();
+        if !enabled {
+            return None;
+        }
+        let keys = current_local_keys();
+        let input = KeyInput {
+            keycode: event.platform_code,
+            down,
+            mods,
+            event: event.clone(),
+        };
+        let mut state = KEY_STATE.lock().unwrap();
+        return mac_key_events(
+            peer,
+            enabled,
+            &keys,
+            &mut state,
+            input,
+            key_event,
+            modifier_events,
+        );
+    }
     #[cfg(not(target_os = "macos"))]
     {
         let _ = modifier_events;
@@ -369,68 +722,119 @@ fn single_key_events(
     Some(vec![with_legacy_modifiers(converted?)])
 }
 
-#[cfg(target_os = "macos")]
-fn mac_chord_events(
-    peer: &str,
-    event: &Event,
-    key_event: &KeyEvent,
+/// A local key event on a Mac as the 한/영 logic needs it.
+struct KeyInput<E> {
+    /// macOS virtual keycode.
+    keycode: u32,
     down: bool,
+    /// Modifiers held besides the key itself.
+    mods: Mods,
+    event: E,
+}
+
+/// The key events to send for a Mac's key event, or `None` to send it as usual:
+/// always when the option is off (`enabled`) or the peer has no 한/영 key.
+fn mac_key_events<E>(
+    peer: &str,
+    enabled: bool,
+    keys: &LocalHangulKeys,
+    state: &mut KeyState<E>,
+    input: KeyInput<E>,
+    key_event: &KeyEvent,
     modifier_events: &dyn Fn(bool) -> Vec<KeyEvent>,
 ) -> Option<Vec<KeyEvent>> {
     let peer_os = peer_os(peer)?;
-    if !option_enabled() {
+    if !enabled {
         return None;
     }
-    let loaded = LOCAL_CHORDS.lock().unwrap().clone();
-    let chords = match loaded {
-        Some(chords) => chords,
-        None => {
-            crate::platform::macos_input_source::load_local_hangul_chords();
-            LOCAL_CHORDS.lock().unwrap().clone().unwrap_or_default()
-        }
-    };
-    let (alt, ctrl, shift, command) =
-        crate::keyboard::client::get_modifiers_state(false, false, false, false);
-    let mods = Mods {
-        ctrl,
-        alt,
-        shift,
-        command,
-    };
-    let keycode = event.platform_code;
-    let action = chord_action(
-        &chords,
-        &mut HELD_CHORD_KEYS.lock().unwrap(),
+    let KeyInput {
         keycode,
         down,
         mods,
-    );
-    let toggle_down = match action {
-        ChordAction::Pass => return None,
-        ChordAction::Swallow => return Some(Vec::new()),
-        ChordAction::Toggle(toggle_down) => toggle_down,
+        event,
+    } = input;
+    let toggles: &[bool] = match mac_key_action(keys, state, keycode, down, mods, event) {
+        MacKeyAction::Pass => return None,
+        MacKeyAction::Swallow => return Some(Vec::new()),
+        MacKeyAction::Toggle(true) => &[true],
+        MacKeyAction::Toggle(false) => &[false],
+        MacKeyAction::Tap => &[true, false],
     };
-    let evt = peer_toggle_event(Os::MacOS, peer_os, toggle_down, key_event)?;
-    let around = toggle_down && mods != Mods::default();
-    if toggle_down {
-        let name = Chord { keycode, mods }.name();
+    let mut toggle_events = Vec::new();
+    for toggle_down in toggles {
+        toggle_events.push(peer_toggle_event(
+            Os::MacOS,
+            peer_os,
+            *toggle_down,
+            key_event,
+        )?);
+    }
+    if toggles[0] {
+        let name = match keycode {
+            MAC_KVK_CAPS_LOCK if keys.caps_lock => "Caps Lock".to_owned(),
+            MAC_KVK_FUNCTION if keys.globe => "🌐".to_owned(),
+            _ => Chord { keycode, mods }.name(),
+        };
         hbb_common::log::info!(
             "Local 한/영 key {} sent to {} peer as {:?} ({:?} mode)",
             name,
             peer,
-            evt.union,
-            evt.mode
+            toggle_events[0].union,
+            toggle_events[0].mode
         );
     }
+    // A chord's modifiers (the Control of ⌃Space) already went to the peer.
+    let around = toggles[0] && mods != Mods::default();
     let mut events = Vec::new();
     if around {
         events.extend(modifier_events(false));
-        events.push(evt);
+        events.extend(toggle_events);
         events.extend(modifier_events(true));
     } else {
-        events.push(with_legacy_modifiers(evt));
+        events.extend(toggle_events.into_iter().map(with_legacy_modifiers));
     }
     Some(events)
+}
+
+/// The lines Settings shows under the 한/영 option: the keys used as 한/영
+/// now, then what the user should know about them. `tr` translates a fixed
+/// phrase; key names ("⌃Space", "Caps Lock", "🌐") stay as they are.
+pub fn settings_status_lines(
+    enabled: bool,
+    display: &LocalHangulKeyDisplay,
+    tr: impl Fn(&str) -> String,
+) -> Vec<String> {
+    let heading = tr("Keys used as Korean/English now:");
+    if !enabled {
+        return vec![format!("{} {}", heading, tr("Off"))];
+    }
+    let mut lines = vec![format!("{} {}", heading, display.names.join(", "))];
+    if display.names.iter().any(|n| n == "Caps Lock" || n == "🌐") {
+        lines.push(tr("Caps Lock and 🌐 may switch this Mac's input source too."));
+    }
+    if !display.unreadable.is_empty() {
+        let names: Vec<String> = display
+            .unreadable
+            .iter()
+            .map(|s| match s {
+                MacKeySetting::CapsLockSwitch => tr("Caps Lock switching"),
+                MacKeySetting::GlobeKeyAction => tr("🌐 key action"),
+            })
+            .collect();
+        lines.push(format!("{} {}", tr("Could not read:"), names.join(", ")));
+    }
+    lines
+}
+
+/// [`settings_status_lines`] for this computer, read now and translated.
+pub fn settings_status_lines_now() -> Vec<String> {
+    let enabled = option_enabled();
+    let display = if enabled {
+        local_hangul_keys_for_display()
+    } else {
+        LocalHangulKeyDisplay::default()
+    };
+    settings_status_lines(enabled, &display, |s| crate::lang::translate(s.to_owned()))
 }
 
 #[cfg(test)]
@@ -748,11 +1152,418 @@ mod tests {
         }
     }
 
+    fn settings(caps_lock_switch: Option<bool>, fn_usage: Option<i32>) -> MacKeySettings {
+        MacKeySettings {
+            caps_lock_switch,
+            fn_usage,
+        }
+    }
+
+    const F18: Chord = Chord {
+        keycode: 79,
+        mods: NONE,
+    };
+    const CTRL_SPACE: Chord = Chord {
+        keycode: 49,
+        mods: CTRL,
+    };
+
+    #[test]
+    fn detected_keys_follow_the_caps_lock_and_globe_settings() {
+        let hotkeys = [Some(F18), Some(CTRL_SPACE)];
+        let names = |s| detect_local_hangul_keys(hotkeys, s).display().names;
+        // Caps Lock switching on, 🌐 changes the input source.
+        let keys = detect_local_hangul_keys(hotkeys, settings(Some(true), Some(1)));
+        assert!(keys.caps_lock && keys.globe && keys.unreadable.is_empty());
+        assert_eq!(
+            keys.display().names,
+            ["F18", "⌃Space", "Caps Lock", "🌐", "LANG1"]
+        );
+        // Caps Lock switching off; 🌐 does nothing, shows emoji or dictation.
+        for usage in [0, 2, 3] {
+            let keys = detect_local_hangul_keys(hotkeys, settings(Some(false), Some(usage)));
+            assert!(!keys.caps_lock && !keys.globe && keys.unreadable.is_empty());
+            assert_eq!(keys.display().names, ["F18", "⌃Space", "LANG1"]);
+        }
+        assert_eq!(
+            names(settings(Some(true), Some(2))),
+            ["F18", "⌃Space", "Caps Lock", "LANG1"]
+        );
+        assert_eq!(
+            names(settings(Some(false), Some(1))),
+            ["F18", "⌃Space", "🌐", "LANG1"]
+        );
+        // Shortcuts off: LANG1 and the settings keys remain.
+        let keys = detect_local_hangul_keys([None, None], settings(Some(true), Some(1)));
+        assert_eq!(keys.display().names, ["Caps Lock", "🌐", "LANG1"]);
+        // A shortcut that is LANG1 itself is listed once.
+        let lang1 = detect_local_hangul_keys([Some(LANG1)], settings(Some(false), Some(0)));
+        assert_eq!(lang1.display().names, ["LANG1"]);
+    }
+
+    #[test]
+    fn unreadable_settings_do_not_count_and_are_reported() {
+        let keys = detect_local_hangul_keys([Some(CTRL_SPACE)], settings(None, None));
+        assert!(!keys.caps_lock && !keys.globe);
+        assert_eq!(
+            keys.unreadable,
+            [MacKeySetting::CapsLockSwitch, MacKeySetting::GlobeKeyAction]
+        );
+        let display = keys.display();
+        assert_eq!(display.names, ["⌃Space", "LANG1"]);
+        assert_eq!(
+            display
+                .unreadable
+                .iter()
+                .map(|s| s.id())
+                .collect::<Vec<_>>(),
+            ["caps-lock-switch", "globe-key-action"]
+        );
+        // An 🌐 action this code does not know is not guessed.
+        let keys = detect_local_hangul_keys([], settings(Some(true), Some(7)));
+        assert!(keys.caps_lock && !keys.globe);
+        assert_eq!(keys.unreadable, [MacKeySetting::GlobeKeyAction]);
+        let keys = detect_local_hangul_keys([], settings(None, Some(1)));
+        assert!(!keys.caps_lock && keys.globe);
+        assert_eq!(keys.unreadable, [MacKeySetting::CapsLockSwitch]);
+    }
+
+    const CAPS: u32 = 57;
+    const GLOBE: u32 = 63;
+    const KEY_E: u32 = 14;
+    const LEFT_ARROW: u32 = 123;
+    const F1: u32 = 122;
+
+    fn all_keys() -> LocalHangulKeys {
+        detect_local_hangul_keys([Some(CTRL_SPACE)], settings(Some(true), Some(1)))
+    }
+
+    /// Feeds key events through `mac_key_events` for a Linux peer in map mode;
+    /// each event is identified by its keycode in `event`. Returns, per input,
+    /// `None` (sent as usual) or the keycodes sent instead, and the held-back
+    /// 🌐 key-down due before it.
+    struct Session {
+        peer: &'static str,
+        enabled: bool,
+        keys: LocalHangulKeys,
+        state: KeyState<u32>,
+    }
+
+    impl Session {
+        fn new(peer: &'static str, keys: LocalHangulKeys) -> Self {
+            Session {
+                peer,
+                enabled: true,
+                keys,
+                state: KeyState::new(),
+            }
+        }
+
+        fn key(
+            &mut self,
+            keycode: u32,
+            down: bool,
+            mods: Mods,
+        ) -> (Option<Vec<(bool, u32)>>, Option<u32>) {
+            let mut key_event = KeyEvent::new();
+            key_event.mode = KeyboardMode::Map.into();
+            let input = KeyInput {
+                keycode,
+                down,
+                mods,
+                event: keycode,
+            };
+            let sent = mac_key_events(
+                self.peer,
+                self.enabled,
+                &self.keys,
+                &mut self.state,
+                input,
+                &key_event,
+                &|_| Vec::new(),
+            )
+            .map(|events| events.iter().map(|e| (e.down, e.chr())).collect());
+            (sent, self.state.to_send.take())
+        }
+
+        fn press(&mut self, keycode: u32) -> (Option<Vec<(bool, u32)>>, Option<u32>) {
+            self.key(keycode, true, NONE)
+        }
+
+        fn release(&mut self, keycode: u32) -> (Option<Vec<(bool, u32)>>, Option<u32>) {
+            self.key(keycode, false, NONE)
+        }
+    }
+
+    // The peer's 한/영 key (Linux: keycode 130) down and up.
+    fn tap() -> Option<Vec<(bool, u32)>> {
+        Some(vec![(true, 130), (false, 130)])
+    }
+    fn nothing() -> Option<Vec<(bool, u32)>> {
+        Some(Vec::new())
+    }
+
+    #[test]
+    fn globe_tapped_alone_is_the_peer_hangul_key_and_fn_is_not_sent() {
+        let mut s = Session::new("linux", all_keys());
+        assert_eq!(s.press(GLOBE), (nothing(), None));
+        assert_eq!(s.release(GLOBE), (tap(), None));
+        // Repeated key-downs while held still toggle once.
+        assert_eq!(s.press(GLOBE), (nothing(), None));
+        assert_eq!(s.press(GLOBE), (nothing(), None));
+        assert_eq!(s.release(GLOBE), (tap(), None));
+        // Windows and Mac peers get their own 한/영 key.
+        let mut s = Session::new("macos", all_keys());
+        s.press(GLOBE);
+        assert_eq!(s.release(GLOBE).0, Some(vec![(true, 79), (false, 79)]));
+        let mut s = Session::new("windows", all_keys());
+        s.press(GLOBE);
+        let mut key_event = KeyEvent::new();
+        key_event.mode = KeyboardMode::Map.into();
+        let input = KeyInput {
+            keycode: GLOBE,
+            down: false,
+            mods: NONE,
+            event: GLOBE,
+        };
+        let sent = mac_key_events(
+            "windows",
+            true,
+            &s.keys,
+            &mut s.state,
+            input,
+            &key_event,
+            &|_| Vec::new(),
+        )
+        .unwrap();
+        assert_eq!(sent.len(), 2);
+        assert!(sent.iter().all(|e| is_legacy_hangul(Some(e.clone()))));
+        assert_eq!((sent[0].down, sent[1].down), (true, false));
+    }
+
+    #[test]
+    fn globe_with_another_key_is_a_combination_without_toggle() {
+        for other in [KEY_E, LEFT_ARROW, F1, 56 /* Shift */] {
+            let mut s = Session::new("linux", all_keys());
+            assert_eq!(s.press(GLOBE), (nothing(), None));
+            // The held-back 🌐 key-down goes first, then the key as usual.
+            assert_eq!(s.press(other), (None, Some(GLOBE)), "{other}");
+            assert_eq!(s.release(other), (None, None));
+            assert_eq!(s.press(other), (None, None));
+            assert_eq!(s.release(other), (None, None));
+            assert_eq!(s.release(GLOBE), (None, None));
+            // The next lone tap toggles again.
+            s.press(GLOBE);
+            assert_eq!(s.release(GLOBE), (tap(), None));
+        }
+    }
+
+    #[test]
+    fn modifier_first_then_globe_is_a_combination() {
+        for mods in [
+            CTRL,
+            Mods { alt: true, ..NONE },
+            Mods {
+                shift: true,
+                ..NONE
+            },
+            Mods {
+                command: true,
+                ..NONE
+            },
+        ] {
+            let mut s = Session::new("linux", all_keys());
+            assert_eq!(s.key(GLOBE, true, mods), (None, None));
+            assert_eq!(s.key(GLOBE, false, mods), (None, None));
+            // Modifier let go before 🌐.
+            assert_eq!(s.key(GLOBE, true, mods), (None, None));
+            assert_eq!(s.key(GLOBE, false, NONE), (None, None));
+        }
+    }
+
+    #[test]
+    fn mouse_press_while_globe_is_held_is_a_combination() {
+        let mut s = Session::new("linux", all_keys());
+        s.press(GLOBE);
+        assert_eq!(s.state.globe_combo(), Some(GLOBE));
+        assert_eq!(s.state.globe_combo(), None);
+        assert_eq!(s.release(GLOBE), (None, None));
+    }
+
+    #[test]
+    fn dropped_globe_sends_nothing() {
+        let mut s = Session::new("linux", all_keys());
+        s.press(GLOBE);
+        assert!(s.state.drop_pending_globe());
+        assert_eq!(s.release(GLOBE), (nothing(), None));
+        // Key-up lost while the keyboard was elsewhere: the next press starts over.
+        s.press(GLOBE);
+        assert!(s.state.drop_pending_globe());
+        assert_eq!(s.press(GLOBE), (nothing(), None));
+        assert_eq!(s.release(GLOBE), (tap(), None));
+        // Nothing pending: nothing to drop.
+        assert!(!s.state.drop_pending_globe());
+    }
+
+    #[test]
+    fn caps_lock_toggles_on_every_press_and_is_not_sent() {
+        let mut s = Session::new("linux", all_keys());
+        assert_eq!(s.press(CAPS), (tap(), None));
+        // The key-up of the Flutter key path (synthesized after each key-down).
+        assert_eq!(s.release(CAPS), (nothing(), None));
+        assert_eq!(s.press(CAPS), (tap(), None));
+        assert_eq!(s.press(CAPS), (tap(), None));
+        // Caps Lock while 🌐 is held: 🌐 is a combination, Caps Lock still toggles.
+        s.press(GLOBE);
+        assert_eq!(s.press(CAPS), (tap(), Some(GLOBE)));
+        assert_eq!(s.release(GLOBE), (None, None));
+    }
+
+    #[test]
+    fn caps_lock_press_counts_once_per_physical_press() {
+        // One event per press, as key-down or key-up by Caps Lock state.
+        for physically_down in [true, false] {
+            let mut seen = false;
+            for _ in 0..3 {
+                assert!(caps_lock_press_counts(&mut seen, physically_down));
+            }
+        }
+        // A key-down and a key-up per press: the key-up is the same press.
+        let mut seen = false;
+        for _ in 0..3 {
+            assert!(caps_lock_press_counts(&mut seen, true));
+            assert!(!caps_lock_press_counts(&mut seen, false));
+        }
+        // A key-up lost: the next key-down still counts.
+        assert!(caps_lock_press_counts(&mut seen, true));
+        assert!(caps_lock_press_counts(&mut seen, true));
+    }
+
+    #[test]
+    fn caps_lock_and_globe_are_plain_keys_when_their_setting_is_off() {
+        let keys = detect_local_hangul_keys([Some(CTRL_SPACE)], settings(Some(false), Some(2)));
+        let mut s = Session::new("linux", keys);
+        for key in [CAPS, GLOBE] {
+            assert_eq!(s.press(key), (None, None));
+            assert_eq!(s.release(key), (None, None));
+        }
+        let keys = detect_local_hangul_keys([], settings(None, None));
+        let mut s = Session::new("linux", keys);
+        for key in [CAPS, GLOBE] {
+            assert_eq!(s.press(key), (None, None));
+            assert_eq!(s.release(key), (None, None));
+        }
+    }
+
+    #[test]
+    fn peer_without_hangul_key_gets_the_original_keys() {
+        for peer in ["android", "", "webdesktop"] {
+            let mut s = Session::new(peer, all_keys());
+            for key in [CAPS, GLOBE, KEY_E, 49] {
+                assert_eq!(s.press(key), (None, None), "{peer} {key}");
+                assert_eq!(s.release(key), (None, None), "{peer} {key}");
+            }
+            assert_eq!(s.key(49, true, CTRL), (None, None));
+            assert_eq!(s.state.globe, Globe::Idle);
+        }
+    }
+
+    #[test]
+    fn option_off_changes_no_key() {
+        for peer in ["linux", "windows", "macos"] {
+            let mut s = Session::new(peer, all_keys());
+            s.enabled = false;
+            for key in [CAPS, GLOBE, KEY_E, 104] {
+                assert_eq!(s.press(key), (None, None), "{peer} {key}");
+                assert_eq!(s.release(key), (None, None), "{peer} {key}");
+            }
+            s.press(GLOBE);
+            assert_eq!(s.press(KEY_E), (None, None));
+            assert_eq!(s.key(49, true, CTRL), (None, None));
+            assert_eq!(s.key(49, false, CTRL), (None, None));
+            assert_eq!(s.state.globe, Globe::Idle);
+        }
+    }
+
+    #[test]
+    fn chords_still_toggle_with_caps_lock_and_globe_detection() {
+        let mut s = Session::new("linux", all_keys());
+        assert_eq!(s.key(49, true, CTRL).0, Some(vec![(true, 130)]));
+        assert_eq!(s.key(49, true, CTRL).0, nothing());
+        assert_eq!(s.key(49, false, CTRL).0, Some(vec![(false, 130)]));
+        assert_eq!(s.press(104).0, Some(vec![(true, 130)]));
+        assert_eq!(s.release(104).0, Some(vec![(false, 130)]));
+    }
+
     #[test]
     fn key_up_follows_key_down() {
         let mut key_event = KeyEvent::new();
         key_event.mode = KeyboardMode::Map.into();
         let up = convert(Os::Windows, "macos", 0x72, 0x15, false, &key_event);
         assert_eq!(up.map(|e| (e.down, e.chr())), Some((false, 79)));
+    }
+}
+
+#[cfg(test)]
+mod settings_status_tests {
+    use super::*;
+
+    fn tr(s: &str) -> String {
+        format!("<{s}>")
+    }
+
+    fn display(names: &[&str], unreadable: Vec<MacKeySetting>) -> LocalHangulKeyDisplay {
+        LocalHangulKeyDisplay {
+            names: names.iter().map(|n| n.to_string()).collect(),
+            unreadable,
+        }
+    }
+
+    #[test]
+    fn off_shows_only_off() {
+        let d = display(&["⌃Space", "Caps Lock", "LANG1"], vec![MacKeySetting::GlobeKeyAction]);
+        assert_eq!(
+            settings_status_lines(false, &d, tr),
+            vec!["<Keys used as Korean/English now:> <Off>"]
+        );
+    }
+
+    #[test]
+    fn shortcut_and_lang1_only() {
+        let d = display(&["⌃Space", "LANG1"], vec![]);
+        assert_eq!(
+            settings_status_lines(true, &d, tr),
+            vec!["<Keys used as Korean/English now:> ⌃Space, LANG1"]
+        );
+    }
+
+    #[test]
+    fn caps_lock_or_globe_adds_the_note() {
+        for keys in [
+            &["⌃Space", "Caps Lock", "LANG1"][..],
+            &["F18", "🌐", "LANG1"][..],
+        ] {
+            let lines = settings_status_lines(true, &display(keys, vec![]), tr);
+            assert_eq!(lines.len(), 2, "{keys:?}");
+            assert_eq!(
+                lines[1],
+                "<Caps Lock and 🌐 may switch this Mac's input source too.>"
+            );
+        }
+    }
+
+    #[test]
+    fn unreadable_settings_are_listed_in_order() {
+        let d = display(
+            &["⌃Space", "LANG1"],
+            vec![MacKeySetting::CapsLockSwitch, MacKeySetting::GlobeKeyAction],
+        );
+        assert_eq!(
+            settings_status_lines(true, &d, tr),
+            vec![
+                "<Keys used as Korean/English now:> ⌃Space, LANG1".to_owned(),
+                "<Could not read:> <Caps Lock switching>, <🌐 key action>".to_owned(),
+            ]
+        );
     }
 }
