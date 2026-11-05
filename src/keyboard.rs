@@ -1039,7 +1039,8 @@ pub fn event_to_key_events(
         held_modifier_key_events(&peer, event, keyboard_mode, &key_event, down)
     });
     // A 🌐 key-down held back as a possible 한/영 tap goes first when this key
-    // makes it a combination.
+    // makes it a combination. `hangul_key` holds no lock across this call, so
+    // the recursion can take the key state again.
     #[allow(unused_mut)]
     let mut events_before = Vec::new();
     #[cfg(target_os = "macos")]

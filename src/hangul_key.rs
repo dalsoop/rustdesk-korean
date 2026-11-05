@@ -444,6 +444,8 @@ impl<E> KeyState<E> {
         }
     }
 
+    // A `Combo` is left as is: the 🌐 key-up that releasing the grab sends
+    // (`Key::Function` is among the keys released then) ends it.
     fn drop_pending_globe(&mut self) -> bool {
         if matches!(self.globe, Globe::Pending(_)) {
             self.globe = Globe::Dropped;
