@@ -666,6 +666,18 @@ fn start_grab_loop() {
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     std::thread::spawn(move || {
         let try_handle_keyboard = move |event: Event, key: Key, is_press: bool| -> Option<Event> {
+            // Caps Lock that switches 한/영 on this Mac goes to the peer as its
+            // 한/영 key; this Mac still gets the event below.
+            #[cfg(target_os = "macos")]
+            if key == Key::CapsLock && KEYBOARD_HOOKED.load(Ordering::SeqCst) {
+                let down = crate::platform::macos_input_source::is_caps_lock_key_down();
+                if let Some(press) =
+                    crate::hangul_key::caps_lock_from_grab(&get_peer_platform(), &event, down)
+                {
+                    client::process_event(&get_keyboard_mode(), &press, None);
+                }
+            }
+
             // fix #2211：CAPS LOCK don't work
             if key == Key::CapsLock || key == Key::NumLock {
                 return Some(event);
@@ -724,6 +736,16 @@ fn start_grab_loop() {
         let func = move |event: Event| match event.event_type {
             EventType::KeyPress(key) => try_handle_keyboard(event, key, true),
             EventType::KeyRelease(key) => try_handle_keyboard(event, key, false),
+            #[cfg(target_os = "macos")]
+            EventType::ButtonPress(_) => {
+                // A click while 🌐 is held alone makes it a combination.
+                if KEYBOARD_HOOKED.load(Ordering::SeqCst) {
+                    if let Some(globe_down) = crate::hangul_key::globe_combo_by_mouse() {
+                        client::process_event(&get_keyboard_mode(), &globe_down, None);
+                    }
+                }
+                Some(event)
+            }
             _ => Some(event),
         };
         #[cfg(target_os = "macos")]
@@ -1013,12 +1035,28 @@ pub fn event_to_key_events(
     key_event.mode = keyboard_mode.into();
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if let Some(events) =
-        crate::hangul_key::to_peer_hangul_key(&peer, event, &key_event, &|down| {
-            held_modifier_key_events(&peer, event, keyboard_mode, &key_event, down)
-        })
-    {
-        return events;
+    let hangul_events = crate::hangul_key::to_peer_hangul_key(&peer, event, &key_event, &|down| {
+        held_modifier_key_events(&peer, event, keyboard_mode, &key_event, down)
+    });
+    // A 🌐 key-down held back as a possible 한/영 tap goes first when this key
+    // makes it a combination.
+    #[allow(unused_mut)]
+    let mut events_before = Vec::new();
+    #[cfg(target_os = "macos")]
+    if let Some(globe_down) = crate::hangul_key::take_globe_to_send() {
+        events_before = event_to_key_events(peer.clone(), &globe_down, keyboard_mode, _lock_modes);
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if let Some(events) = hangul_events {
+        // Caps Lock and 🌐 taken as 한/영 never reach the peer, so there is
+        // nothing to release for them; Caps Lock presses come unpaired.
+        if let EventType::KeyPress(key @ (Key::CapsLock | Key::Function))
+        | EventType::KeyRelease(key @ (Key::CapsLock | Key::Function)) = event.event_type
+        {
+            TO_RELEASE.lock().unwrap().remove(&key);
+        }
+        events_before.extend(events);
+        return events_before;
     }
 
     let mut key_events = match keyboard_mode {
@@ -1048,7 +1086,11 @@ pub fn event_to_key_events(
             }
         }
     }
-    key_events
+    if events_before.is_empty() {
+        return key_events;
+    }
+    events_before.extend(key_events);
+    events_before
 }
 
 /// The modifier keys held now (other than `event`'s key), as key events for

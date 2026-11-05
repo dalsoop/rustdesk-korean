@@ -27,6 +27,9 @@ extern "C" {
         params: *mut i64,
         max_params: i32,
     ) -> i32;
+    fn MacReadCapsLockSwitch() -> i32;
+    fn MacReadFnUsageType() -> i32;
+    fn MacIsCapsLockKeyDown() -> bool;
     fn CGSIsSymbolicHotKeyEnabled(hot_key: i32) -> bool;
     fn CGSSetSymbolicHotKeyEnabled(hot_key: i32, enabled: bool) -> i32;
 }
@@ -172,6 +175,10 @@ pub fn set_remote_keyboard_active(owner: u128, active: bool, reason: &str) {
     }
     let mut pause = HOTKEY_PAUSE.lock().unwrap();
     let HotkeyPause { owners, suspended } = &mut *pause;
+    if !active || !owners.contains(&owner) {
+        // A 🌐 held back for the window that had the keyboard is not sent.
+        crate::hangul_key::drop_pending_globe();
+    }
     match note_owner(owners, owner, active) {
         Transition::Suspend => suspend_hotkeys(suspended, reason),
         Transition::Restore => restore_hotkeys(suspended, reason),
@@ -204,15 +211,37 @@ pub fn restore_hotkeys_left_suspended() {
 }
 
 /// Reads this Mac's input-source shortcuts (60, 61) from
-/// com.apple.symbolichotkeys; they and LANG1 become the local 한/영 keys.
+/// com.apple.symbolichotkeys and its Caps Lock and 🌐 settings; with LANG1
+/// they become the local 한/영 keys.
 pub fn load_local_hangul_chords() {
-    use crate::hangul_key::{chord_from_symbolic_hotkey, local_chords, set_local_chords};
-    let chords = local_chords(
+    use crate::hangul_key::{chord_from_symbolic_hotkey, detect_local_hangul_keys, set_local_keys};
+    let keys = detect_local_hangul_keys(
         INPUT_SOURCE_HOTKEYS
             .iter()
             .map(|id| chord_from_symbolic_hotkey(*id, read_symbolic_hotkey(*id))),
+        read_mac_key_settings(),
     );
-    set_local_chords(chords);
+    set_local_keys(keys);
+}
+
+/// "Use the Caps Lock key to switch to and from ABC" and "Press 🌐 key to", as
+/// HIToolbox itself decides them (including the defaults when never changed).
+fn read_mac_key_settings() -> crate::hangul_key::MacKeySettings {
+    let caps_lock_switch = match unsafe { MacReadCapsLockSwitch() } {
+        1 => Some(true),
+        0 => Some(false),
+        _ => None,
+    };
+    let fn_usage = unsafe { MacReadFnUsageType() };
+    crate::hangul_key::MacKeySettings {
+        caps_lock_switch,
+        fn_usage: (fn_usage >= 0).then_some(fn_usage),
+    }
+}
+
+/// Whether the Caps Lock key is physically down now (HID state).
+pub fn is_caps_lock_key_down() -> bool {
+    unsafe { MacIsCapsLockKeyDown() }
 }
 
 fn read_symbolic_hotkey(hot_key: i32) -> crate::hangul_key::SymbolicHotkeyEntry {
