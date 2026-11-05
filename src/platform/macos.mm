@@ -957,12 +957,54 @@ extern "C" bool MacToggleKoreanInputSource() {
     return status == noErr;
 }
 
+// The modifiers a posted shortcut can leave set in the HID modifier state.
+static const CGEventFlags kHotKeyModifierFlags = kCGEventFlagMaskShift | kCGEventFlagMaskControl |
+                                                 kCGEventFlagMaskAlternate | kCGEventFlagMaskCommand |
+                                                 kCGEventFlagMaskSecondaryFn;
+
+// The modifier flags to put back after posting a shortcut with `hotkeyFlags`.
+// `before` is the HID modifier state read before posting; `held` has the flag
+// of every modifier whose key is physically down now. SecondaryFn and the
+// modifiers the shortcut carried come from `held` only, never from `before`:
+// when shortcuts are posted back to back, `before` can be read while the
+// previous shortcut's flags are still in effect, and putting those back would
+// keep Fn (or ⌃) set for good. Other flags are put back as they were.
+extern "C" uint64_t MacFlagsAfterHotKey(uint64_t before, uint64_t hotkeyFlags, uint64_t held) {
+    uint64_t owned = (hotkeyFlags & kHotKeyModifierFlags) | kCGEventFlagMaskSecondaryFn;
+    return (before & ~owned) | (held & owned);
+}
+
+// The flags of the modifiers whose keys are physically down.
+static CGEventFlags HeldModifierFlags() {
+    static const struct {
+        CGEventFlags flag;
+        CGKeyCode keys[2];
+    } kModifierKeys[] = {
+        {kCGEventFlagMaskShift, {kVK_Shift, kVK_RightShift}},
+        {kCGEventFlagMaskControl, {kVK_Control, kVK_RightControl}},
+        {kCGEventFlagMaskAlternate, {kVK_Option, kVK_RightOption}},
+        {kCGEventFlagMaskCommand, {kVK_Command, kVK_RightCommand}},
+        {kCGEventFlagMaskSecondaryFn, {kVK_Function, kVK_Function}},
+    };
+    CGEventFlags held = 0;
+    for (const auto &m : kModifierKeys) {
+        for (CGKeyCode key : m.keys) {
+            if (CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, key)) {
+                held |= m.flag;
+            }
+        }
+    }
+    return held;
+}
+
 // Presses an input-source shortcut (virtual keycode + modifier flags exactly as
 // com.apple.symbolichotkeys stores them) at the HID level, where the window
 // server matches symbolic hotkeys, so the frontmost app switches the input
 // source in its own event order. Keys simulated at the session tap never reach
 // that matching. The HID modifier state is put back afterwards: F keys carry
-// SecondaryFn, which would otherwise stay set for the following keys.
+// SecondaryFn, which would otherwise stay set for the following keys. Fn and
+// the shortcut's own modifiers are put back as the keys physically are (see
+// MacFlagsAfterHotKey), so a stale Fn is cleared rather than kept.
 extern "C" bool MacPostHotKey(uint16_t keycode, uint64_t flags) {
     CGEventSourceRef source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
     if (!source) {
@@ -986,7 +1028,7 @@ extern "C" bool MacPostHotKey(uint16_t keycode, uint64_t flags) {
     CGEventRef restore = CGEventCreateKeyboardEvent(source, kVK_Function, false);
     if (restore) {
         CGEventSetType(restore, kCGEventFlagsChanged);
-        CGEventSetFlags(restore, before);
+        CGEventSetFlags(restore, (CGEventFlags)MacFlagsAfterHotKey(before, flags, HeldModifierFlags()));
         CGEventPost(kCGHIDEventTap, restore);
         CFRelease(restore);
     }
