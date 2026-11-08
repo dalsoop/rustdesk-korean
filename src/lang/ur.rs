@@ -825,6 +825,15 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Tailscale: not found", ""),
         ("Logged in: {}", ""),
         ("Not logged in", ""),
+        ("RustDesk installed, direct access off", ""),
+        ("No RustDesk", ""),
+        ("Or RustDesk or its LAN discovery is turned off", ""),
+        ("Turn on RustDesk direct access on this device", ""),
+        ("This device does not have RustDesk", ""),
+        ("Direct", ""),
+        ("Relayed via {}", ""),
+        ("Last seen {}", ""),
+        ("Hostname", ""),
     ].iter().cloned().collect();
 }
 

@@ -825,5 +825,14 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Tailscale: not found", "Tailscale: 찾을 수 없음"),
         ("Logged in: {}", "로그인: {}"),
         ("Not logged in", "로그인 안 됨"),
+        ("RustDesk installed, direct access off", "RustDesk 있음 · 직접 접속 꺼짐"),
+        ("No RustDesk", "RustDesk 없음"),
+        ("Or RustDesk or its LAN discovery is turned off", "또는 RustDesk가 꺼져 있거나 LAN 검색이 꺼져 있음"),
+        ("Turn on RustDesk direct access on this device", "이 기기에서 RustDesk 직접 접속을 켜야 합니다"),
+        ("This device does not have RustDesk", "이 기기에는 RustDesk가 없습니다"),
+        ("Direct", "직접"),
+        ("Relayed via {}", "중계 {}"),
+        ("Last seen {}", "마지막 접속 {}"),
+        ("Hostname", "호스트 이름"),
     ].iter().cloned().collect();
 }
