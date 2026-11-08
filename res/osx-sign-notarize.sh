@@ -33,8 +33,14 @@ ditto "$app" "$stage/$name"
 
 sops -d --extract '["private_key_pem"]' "$secrets/developer-id-application.enc.yaml" >"$tmp/key.pem"
 sops -d --extract '["certificate_pem"]' "$secrets/developer-id-application.enc.yaml" >"$tmp/cert.pem"
+# Unscoped flags only reach the main executable; nested Mach-O binaries (the `service` helper)
+# need the hardened runtime too or notarization rejects the archive.
+nested=()
+if [ -f "$stage/$name/Contents/MacOS/service" ]; then
+  nested+=(--code-signature-flags "Contents/MacOS/service:runtime")
+fi
 rcodesign sign --pem-source "$tmp/key.pem" --pem-source "$tmp/cert.pem" \
-  --code-signature-flags runtime --entitlements-xml-path "$entitlements" "$stage/$name"
+  --code-signature-flags runtime "${nested[@]}" --entitlements-xml-path "$entitlements" "$stage/$name"
 rm -f "$tmp/key.pem" "$tmp/cert.pem"
 
 sops -d --extract '["p8"]' "$secrets/app-store-connect-api-key.enc.yaml" >"$tmp/key.p8"
