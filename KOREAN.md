@@ -191,7 +191,7 @@ macOS 는 입력 소스 단축키(예: ⌃Space, 또는 Caps Lock 을 F18 로 �
 | 리눅스 .deb | `1.5.0+ko9` (원본 `1.5.0` 보다 뒤로 정렬되어 apt 가 업그레이드로 봄) | `build.py` 의 `get_ko_release()` |
 | 윈도우 exe | 파일 버전 `1.5.0.6809` | Flutter 빌드 번호 |
 | 윈도우 msi | `1.5.0.6809` | `build-desktop-ko.yml` 이 빌드 번호를 `preprocess.py --revision-version` 으로 넘김 |
-| 안드로이드 | versionName `1.5.0-ko.9`, versionCode `6809` | `flutter/android/app/build.gradle` |
+| 안드로이드 | versionName `1.5.0-ko.9`, versionCode `8809`(arm64 분할 APK 라 Flutter 가 빌드 번호에 2000 을 더함) | `flutter/android/app/build.gradle` |
 | macOS | CFBundleShortVersionString `1.5.0`, CFBundleVersion `6809` | Flutter 빌드 번호 |
 | 정보 화면 | "버전: 1.5.0 (ko.9)" | `desktop_setting_page.dart` |
 
@@ -203,7 +203,7 @@ RustDesk 프로토콜 버전(`Cargo.toml` 의 `1.5.0`)은 원본과 같게 둡�
    - 본 앱: `RustDesk.app` → `rustdesk-1.5.0-ko.N-macos-aarch64.zip`
    - Public: `RustDeskPublic.app` → zip 안 이름 `RustDesk Public.app`, `rustdesk-public-1.5.0-ko.N-macos-aarch64.zip`
 3. 윈도우·리눅스: GitHub Actions `Build desktop (Korean fork, Windows/Linux x64)` 가 기본 브랜치 push 에서 돕니다.
-4. 안드로이드: gitlab `gujoai/apps/upstream-mono` 에 `rustdesk/` subtree 를 새 머리로 맞추는 MR 을 내면 pop-os 러너가 같은 서명 키로 APK 를 만듭니다.
+4. 안드로이드: gitlab `gujoai/apps/upstream-mono` 에 `rustdesk/` subtree 를 새 머리로 맞추는 MR 을 내면 CI 가 서명 없는 APK(`apk/rustdesk-1.5.0-ko.N-<커밋>-aarch64-unsigned.apk`)를 만듭니다. CI 러너는 서명 키를 갖지 않습니다. 그 아티팩트를 m5m1 에 받아 `res/android-sign-release.sh <unsigned.apk> rustdesk-1.5.0-ko.N-aarch64.apk` 로 서명합니다. 키는 Bitwarden Secrets Manager `android-signing` 프로젝트에서 `bwsx` 로 이 스크립트에만 들어가고, 서명 인증서 SHA-256 이 기존 APK 와 같지 않으면 실패합니다(`43:7D:FD:91:…:AD:7D`). 결과 `.apk` 옆에 `.sha256` 을 씁니다. 도구는 m5m1 의 `~/work/sdk`(build-tools 34.0.0, JDK 17)입니다.
 5. GitHub 릴리스 `1.5.0-ko.N` 에 네 플랫폼 파일과 RustDesk Public zip, 각 `.sha256` 을 올립니다.
    - 우리 Mac 설치: dotfiles `scripts/adhoc/install-rustdesk-fork.sh <zip> <sha256>`(본 앱), `--public <zip> <sha256>`(Public).
 6. pop-os 는 host-infra 의 `versions.rustdesk`(`1.5.0+koN`), sha256, 주소를 바꾸는 MR 로 올립니다.
