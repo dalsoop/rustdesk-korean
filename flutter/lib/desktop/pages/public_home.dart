@@ -13,6 +13,8 @@ import 'package:get/get.dart';
 const double _kCardWidth = 220;
 const double _kStatusBarHeight = 42;
 
+enum _RustDeskState { checking, reachable, directOff, missing, unreachable }
+
 class PublicHomePage extends StatefulWidget {
   const PublicHomePage({Key? key}) : super(key: key);
 
@@ -32,6 +34,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
   String? _selectedProfileId;
   int _readSeq = 0;
   final Map<String, RustDeskReachability> _reach = {};
+  // A key without a value: the discovery probe got no answer.
+  final Map<String, RustDeskPeerInfo?> _probe = {};
   List<OnPremRecord> _records = [];
 
   @override
@@ -62,6 +66,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
             (snapshot.profiles.isEmpty ? null : snapshot.profiles.first.id);
       }
       _reach.clear();
+      _probe.clear();
     });
     if (snapshot.state != TailscaleState.running) return;
     for (final d in snapshot.devices) {
@@ -74,6 +79,13 @@ class _PublicHomePageState extends State<PublicHomePage> {
       Tailscale.checkRustDesk(ip).then((result) {
         if (!mounted || seq != _readSeq) return;
         setState(() => _reach[d.id] = result);
+      });
+      // An offline peer cannot answer; skipping it keeps the bridge's
+      // worker threads free for the peers that can.
+      if (!d.online) continue;
+      bind.mainPublicProbeRustdesk(ip: ip).then((out) {
+        if (!mounted || seq != _readSeq) return;
+        setState(() => _probe[d.id] = parseRustDeskProbe(out));
       });
     }
     setState(() {});
@@ -366,6 +378,16 @@ class _PublicHomePageState extends State<PublicHomePage> {
       showToast(translate('Unreachable'));
       return;
     }
+    switch (_rustDeskState(device)) {
+      case _RustDeskState.directOff:
+        showToast(translate('Turn on RustDesk direct access on this device'));
+        return;
+      case _RustDeskState.missing:
+        showToast(translate('This device does not have RustDesk'));
+        return;
+      default:
+        break;
+    }
     _saveRecords(recordOnPremConnection(_records, _recordProfile, device,
         DateTime.now().millisecondsSinceEpoch));
     connect(context, ip);
@@ -390,8 +412,9 @@ class _PublicHomePageState extends State<PublicHomePage> {
           ? (entry.record?.lastIp ?? '')
           : translate('Not found in this network');
     } else {
-      subtitle = device.os;
+      subtitle = _tailscaleLine(device);
     }
+    final rustDeskId = device == null ? null : _probe[device.id]?.id;
     final card = Container(
       width: _kCardWidth,
       padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
@@ -416,6 +439,10 @@ class _PublicHomePageState extends State<PublicHomePage> {
                     style: TextStyle(fontSize: 12, color: theme.hintColor)),
                 if (device != null) const SizedBox(height: 4),
                 if (device != null) _buildStates(device),
+                if (rustDeskId != null && rustDeskId.isNotEmpty)
+                  Text('${translate('ID')} $rustDeskId',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: theme.hintColor)),
               ],
             ),
           ),
@@ -437,9 +464,69 @@ class _PublicHomePageState extends State<PublicHomePage> {
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: () => _onCardTap(entry, inactiveProfile),
-        child: card,
+        child: device == null
+            ? card
+            : Tooltip(
+                message: _deviceTooltip(device),
+                waitDuration: const Duration(milliseconds: 500),
+                child: card,
+              ),
       ),
     );
+  }
+
+  _RustDeskState _rustDeskState(TailscaleDevice device) {
+    final reach = _reach[device.id] ?? RustDeskReachability.checking;
+    if (reach == RustDeskReachability.reachable) return _RustDeskState.reachable;
+    if (reach == RustDeskReachability.checking) return _RustDeskState.checking;
+    // Only online peers with an IPv4 are probed.
+    if (!device.online || device.ipv4 == null) {
+      return _RustDeskState.unreachable;
+    }
+    if (!_probe.containsKey(device.id)) return _RustDeskState.checking;
+    return _probe[device.id] == null
+        ? _RustDeskState.missing
+        : _RustDeskState.directOff;
+  }
+
+  String _tailscaleLine(TailscaleDevice device) {
+    final lastSeen = device.lastSeen;
+    if (!device.online && lastSeen != null) {
+      return translate('Last seen {${_formatTime(lastSeen)}}');
+    }
+    final parts = <String>[
+      if (device.ipv4 != null) device.ipv4!,
+      if (device.curAddr.isNotEmpty)
+        translate('Direct')
+      else if (device.relay.isNotEmpty)
+        translate('Relayed via {${device.relay}}'),
+    ];
+    return parts.join(' · ');
+  }
+
+  String _deviceTooltip(TailscaleDevice device) {
+    final peer = _probe[device.id];
+    return [
+      if (device.dnsName.isNotEmpty) device.dnsName,
+      if (device.ips.isNotEmpty) 'IP: ${device.ips.join(', ')}',
+      if (device.curAddr.isNotEmpty) '${translate('Direct')}: ${device.curAddr}',
+      if (device.tags.isNotEmpty)
+        '${translate('Tags')}: ${device.tags.join(', ')}'
+      else if (device.owner.isNotEmpty)
+        '${translate('Owner')}: ${device.owner}',
+      if (device.os.isNotEmpty) 'OS: ${device.os}',
+      if (peer != null && peer.id.isNotEmpty) 'RustDesk ${translate('ID')}: ${peer.id}',
+      if (peer != null && peer.hostname.isNotEmpty)
+        '${translate('Hostname')}: ${peer.hostname}',
+      if (_rustDeskState(device) == _RustDeskState.missing)
+        translate('Or RustDesk or its LAN discovery is turned off'),
+    ].join('\n');
+  }
+
+  String _formatTime(DateTime time) {
+    final t = time.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
   }
 
   TailscaleProfile? _profileForRecord(OnPremRecord? record) {
@@ -451,31 +538,40 @@ class _PublicHomePageState extends State<PublicHomePage> {
   }
 
   Widget _buildStates(TailscaleDevice device) {
-    final reach = _reach[device.id] ?? RustDeskReachability.checking;
-    final (String label, Color color) = switch (reach) {
-      RustDeskReachability.reachable => ('Reachable', Colors.green),
-      RustDeskReachability.unreachable => ('Unreachable', Colors.redAccent),
-      RustDeskReachability.checking => ('Checking', Colors.grey),
+    final (String label, Color color) = switch (_rustDeskState(device)) {
+      _RustDeskState.reachable => ('Reachable', Colors.green),
+      _RustDeskState.directOff => (
+          'RustDesk installed, direct access off',
+          Colors.orange
+        ),
+      _RustDeskState.missing => ('No RustDesk', Colors.redAccent),
+      _RustDeskState.unreachable => ('Unreachable', Colors.redAccent),
+      _RustDeskState.checking => ('Checking', Colors.grey),
     };
-    return Row(
+    // The RustDesk state gets its own line: the longer labels do not fit
+    // beside the online state in a card this narrow.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: device.online ? Colors.green : Colors.grey,
-          ),
+        Row(
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: device.online ? Colors.green : Colors.grey,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(translate(device.online ? 'Online' : 'Offline'),
+                style: const TextStyle(fontSize: 12)),
+          ],
         ),
-        const SizedBox(width: 4),
-        Text(translate(device.online ? 'Online' : 'Offline'),
-            style: const TextStyle(fontSize: 12)),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(translate(label),
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 12, color: color)),
-        ),
+        Text(translate(label),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, color: color)),
       ],
     );
   }

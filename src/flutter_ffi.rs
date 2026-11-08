@@ -2540,6 +2540,10 @@ pub fn main_is_public_flavor() -> SyncReturn<bool> {
     SyncReturn(crate::public_flavor::is_public())
 }
 
+pub fn main_public_probe_rustdesk(ip: String) -> String {
+    crate::public_flavor::probe_rustdesk_json(&ip)
+}
+
 pub fn is_disable_settings() -> SyncReturn<bool> {
     SyncReturn(config::is_disable_settings())
 }

@@ -1684,6 +1684,10 @@ class RustdeskImpl {
     return false;
   }
 
+  Future<String> mainPublicProbeRustdesk({required String ip, dynamic hint}) {
+    return Future.value('');
+  }
+
   bool isDisableSettings({dynamic hint}) {
     // Checks HARD_SETTINGS["disable-settings"] == "Y"
     return mainGetHardOption(key: "disable-settings", hint: hint) == "Y";

@@ -36,6 +36,15 @@ class TailscaleDevice {
   final String os;
   final bool online;
   final String? ipv4;
+  final String dnsName;
+  final List<String> ips;
+  // Non-empty when traffic goes straight to the peer at this address.
+  final String curAddr;
+  // DERP region used when there is no direct path.
+  final String relay;
+  final DateTime? lastSeen;
+  final String owner;
+  final List<String> tags;
 
   const TailscaleDevice({
     required this.id,
@@ -43,7 +52,41 @@ class TailscaleDevice {
     required this.os,
     required this.online,
     required this.ipv4,
+    this.dnsName = '',
+    this.ips = const [],
+    this.curAddr = '',
+    this.relay = '',
+    this.lastSeen,
+    this.owner = '',
+    this.tags = const [],
   });
+}
+
+/// What a peer's RustDesk LAN discovery listener said about itself.
+class RustDeskPeerInfo {
+  final String id;
+  final String hostname;
+  final String platform;
+
+  const RustDeskPeerInfo(
+      {required this.id, required this.hostname, required this.platform});
+}
+
+/// Parses the JSON from `mainPublicProbeRustdesk`; empty or bad text means
+/// nothing answered.
+RustDeskPeerInfo? parseRustDeskProbe(String output) {
+  if (output.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(output);
+    if (decoded is! Map<String, dynamic>) return null;
+    return RustDeskPeerInfo(
+      id: (decoded['id'] as String?) ?? '',
+      hostname: (decoded['hostname'] as String?) ?? '',
+      platform: (decoded['platform'] as String?) ?? '',
+    );
+  } catch (_) {
+    return null;
+  }
 }
 
 class TailscaleStatus {
@@ -115,6 +158,7 @@ TailscaleStatus parseTailscaleStatusJson(String output) {
 
   final self = decoded['Self'];
   final selfId = self is Map<String, dynamic> ? self['ID'] : null;
+  final users = decoded['User'];
 
   final devices = <TailscaleDevice>[];
   final peers = decoded['Peer'];
@@ -130,6 +174,13 @@ TailscaleStatus parseTailscaleStatusJson(String output) {
         os: (peer['OS'] as String?) ?? '',
         online: peer['Online'] == true,
         ipv4: _firstIpv4(peer['TailscaleIPs']),
+        dnsName: _dnsName(peer['DNSName']),
+        ips: _stringList(peer['TailscaleIPs']),
+        curAddr: (peer['CurAddr'] as String?) ?? '',
+        relay: (peer['Relay'] as String?) ?? '',
+        lastSeen: _lastSeen(peer['LastSeen']),
+        owner: _ownerLogin(users, peer['UserID']),
+        tags: _stringList(peer['Tags']),
       ));
     }
   }
@@ -155,6 +206,31 @@ String? _firstIpv4(Object? ips) {
     }
   }
   return null;
+}
+
+String _dnsName(Object? dns) {
+  if (dns is! String) return '';
+  return dns.endsWith('.') ? dns.substring(0, dns.length - 1) : dns;
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) return const [];
+  return value.whereType<String>().toList();
+}
+
+// Tailscale writes the zero time (year 1) for a peer it has not seen yet.
+DateTime? _lastSeen(Object? value) {
+  if (value is! String) return null;
+  final t = DateTime.tryParse(value);
+  if (t == null || t.year <= 1) return null;
+  return t;
+}
+
+String _ownerLogin(Object? users, Object? userId) {
+  if (users is! Map<String, dynamic> || userId == null) return '';
+  final user = users['$userId'];
+  if (user is! Map<String, dynamic>) return '';
+  return (user['LoginName'] as String?) ?? '';
 }
 
 class _CommandResult {
