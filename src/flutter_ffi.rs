@@ -2536,6 +2536,10 @@ pub fn is_custom_client() -> SyncReturn<bool> {
     SyncReturn(crate::common::is_custom_client())
 }
 
+pub fn main_is_public_flavor() -> SyncReturn<bool> {
+    SyncReturn(crate::public_flavor::is_public())
+}
+
 pub fn is_disable_settings() -> SyncReturn<bool> {
     SyncReturn(config::is_disable_settings())
 }

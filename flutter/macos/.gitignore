@@ -2,6 +2,9 @@
 **/Flutter/ephemeral/
 **/Pods/
 
+# Written by build.py for RUSTDESK_FLAVOR=public
+Runner/Configs/Flavor.xcconfig
+
 # Xcode-related
 **/dgph
 **/xcuserdata/

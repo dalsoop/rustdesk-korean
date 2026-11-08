@@ -1680,6 +1680,10 @@ class RustdeskImpl {
     return mainGetAppNameSync(hint: hint) != "RustDesk";
   }
 
+  bool mainIsPublicFlavor({dynamic hint}) {
+    return false;
+  }
+
   bool isDisableSettings({dynamic hint}) {
     // Checks HARD_SETTINGS["disable-settings"] == "Y"
     return mainGetHardOption(key: "disable-settings", hint: hint) == "Y";
