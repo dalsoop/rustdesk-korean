@@ -24,6 +24,7 @@ pub use self::rendezvous_mediator::*;
 /// cbindgen:ignore
 pub mod common;
 mod fork_update;
+pub mod public_flavor;
 #[cfg(not(any(target_os = "ios")))]
 pub mod ipc;
 #[cfg(not(any(

@@ -475,7 +475,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         });
       }
     } else if (isMacOS) {
-      final isOutgoingOnly = bind.isOutgoingOnly();
+      final isOutgoingOnly = bind.isOutgoingOnly() || bind.mainIsPublicFlavor();
       if (!(isOutgoingOnly || bind.mainIsCanScreenRecording(prompt: false))) {
         return buildInstallCard("Permissions", "config_screen", "Configure",
             () async {
