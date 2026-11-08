@@ -1067,6 +1067,7 @@ extern "C" int MacReadSymbolicHotKey(int hotKey, int *enabled, long long *params
 }
 
 #include <dlfcn.h>
+#include <atomic>
 
 // HIToolbox exports these without a header. They answer the way the system
 // does, defaults included: com.apple.HIToolbox has no TISRomanSwitchState or
@@ -1075,8 +1076,7 @@ extern "C" int MacReadSymbolicHotKey(int hotKey, int *enabled, long long *params
 typedef Boolean (*MacTISBoolFn)(void);
 typedef int (*MacTISIntFn)(void);
 
-// "Use the Caps Lock key to switch to and from ABC": 1 on, 0 off, -1 unreadable.
-extern "C" int MacReadCapsLockSwitch() {
+static int MacReadCapsLockSwitchOnMain() {
     MacTISBoolFn enabled = (MacTISBoolFn)dlsym(RTLD_DEFAULT, "TISIsRomanSwitchEnabled");
     MacTISBoolFn allowed = (MacTISBoolFn)dlsym(RTLD_DEFAULT, "TISIsRomanSwitchAllowed");
     if (!enabled || !allowed) {
@@ -1085,15 +1085,45 @@ extern "C" int MacReadCapsLockSwitch() {
     return enabled() && allowed() ? 1 : 0;
 }
 
-// "Press 🌐 key to": 0 Do Nothing, 1 Change Input Source, 2 Show Emoji &
-// Symbols, 3 Start Dictation; -1 unreadable.
-extern "C" int MacReadFnUsageType() {
+static int MacReadFnUsageTypeOnMain() {
     MacTISIntFn usage = (MacTISIntFn)dlsym(RTLD_DEFAULT, "TISGetFnUsageType");
     if (!usage) {
         return -1;
     }
     int value = usage();
     return value < 0 ? -1 : value;
+}
+
+// TIS asserts it runs on the main queue (macOS 26+ traps otherwise), but these are
+// called from the Flutter UI thread. Off the main thread, return the last value read
+// on it and refresh asynchronously; a synchronous hop could deadlock while the main
+// thread waits for a frame. Before the first refresh the value is -1 (unreadable).
+static std::atomic<int> gMacCapsLockSwitch{-1};
+static std::atomic<int> gMacFnUsageType{-1};
+
+// "Use the Caps Lock key to switch to and from ABC": 1 on, 0 off, -1 unreadable.
+extern "C" int MacReadCapsLockSwitch() {
+    if ([NSThread isMainThread]) {
+        gMacCapsLockSwitch = MacReadCapsLockSwitchOnMain();
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            gMacCapsLockSwitch = MacReadCapsLockSwitchOnMain();
+        });
+    }
+    return gMacCapsLockSwitch;
+}
+
+// "Press 🌐 key to": 0 Do Nothing, 1 Change Input Source, 2 Show Emoji &
+// Symbols, 3 Start Dictation; -1 unreadable.
+extern "C" int MacReadFnUsageType() {
+    if ([NSThread isMainThread]) {
+        gMacFnUsageType = MacReadFnUsageTypeOnMain();
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            gMacFnUsageType = MacReadFnUsageTypeOnMain();
+        });
+    }
+    return gMacFnUsageType;
 }
 
 // Whether Caps Lock is physically down, as the HID system sees it.

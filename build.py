@@ -951,6 +951,35 @@ def build_deb_from_folder(version, binary_folder, want_drm=False):
     os.chdir("..")
 
 
+# Korean fork: RUSTDESK_FLAVOR=public builds the separate "RustDesk Public" app. Cargo reads the
+# same variable in build.rs; Xcode gets the app identity from Flavor.xcconfig, which
+# Runner/Configs/AppInfo.xcconfig includes when it exists.
+RUSTDESK_FLAVOR = os.environ.get('RUSTDESK_FLAVOR', '')
+if RUSTDESK_FLAVOR not in ('', 'public'):
+    raise Exception(f'Unknown RUSTDESK_FLAVOR {RUSTDESK_FLAVOR!r}; expected "public" or unset')
+MACOS_FLAVOR_XCCONFIG = os.path.join(REPO_ROOT, 'flutter', 'macos', 'Runner', 'Configs', 'Flavor.xcconfig')
+PUBLIC_APP_NAME = 'RustDeskPublic'
+PUBLIC_FLAVOR_XCCONFIG = f'''PRODUCT_NAME = {PUBLIC_APP_NAME}
+// MainMenu.xib names its classes in module RustDesk.
+PRODUCT_MODULE_NAME = RustDesk
+RUSTDESK_BUNDLE_IDENTIFIER = net.ranode.rustdesk-public
+RUSTDESK_DISPLAY_NAME = RustDesk Public
+RUSTDESK_URL_SCHEME = rustdeskpublic
+'''
+
+
+def macos_app_bundle():
+    return (PUBLIC_APP_NAME if RUSTDESK_FLAVOR == 'public' else 'RustDesk') + '.app'
+
+
+def write_macos_flavor_xcconfig():
+    if RUSTDESK_FLAVOR == 'public':
+        with open(MACOS_FLAVOR_XCCONFIG, 'w', encoding='utf-8') as f:
+            f.write(PUBLIC_FLAVOR_XCCONFIG)
+    elif os.path.exists(MACOS_FLAVOR_XCCONFIG):
+        os.remove(MACOS_FLAVOR_XCCONFIG)
+
+
 def build_flutter_dmg(version, features):
     if not skip_cargo:
         # set minimum osx build target, now is 10.14, which is the same as the flutter xcode project
@@ -964,9 +993,10 @@ def build_flutter_dmg(version, features):
     # so the universal-by-default ARCHS_STANDARD doesn't try to link a missing slice.
     # FLUTTER_XCODE_* env vars are forwarded to xcodebuild as build settings.
     mac_arch = 'arm64' if platform.machine().lower() in ('arm64', 'aarch64') else 'x86_64'
+    write_macos_flavor_xcconfig()
     system2(
         f'FLUTTER_XCODE_ARCHS={mac_arch} FLUTTER_XCODE_ONLY_ACTIVE_ARCH=YES flutter build macos --release')
-    system2('cp -rf ../target/release/service ./build/macos/Build/Products/Release/RustDesk.app/Contents/MacOS/')
+    system2(f'cp -rf ../target/release/service ./build/macos/Build/Products/Release/{macos_app_bundle()}/Contents/MacOS/')
     '''
     system2(
         "create-dmg --volname \"RustDesk Installer\" --window-pos 200 120 --window-size 800 400 --icon-size 100 --app-drop-link 600 185 --icon RustDesk.app 200 190 --hide-extension RustDesk.app rustdesk.dmg ./build/macos/Build/Products/Release/RustDesk.app")

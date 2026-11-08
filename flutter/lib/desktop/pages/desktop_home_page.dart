@@ -12,6 +12,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
+import 'package:flutter_hbb/desktop/pages/public_home.dart';
 import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
@@ -181,7 +182,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   buildRightPane(BuildContext context) {
     return Container(
       color: Theme.of(context).scaffoldBackgroundColor,
-      child: ConnectionPage(),
+      child: bind.mainIsPublicFlavor() ? PublicHomePage() : ConnectionPage(),
     );
   }
 
@@ -475,7 +476,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         });
       }
     } else if (isMacOS) {
-      final isOutgoingOnly = bind.isOutgoingOnly();
+      final isOutgoingOnly = bind.isOutgoingOnly() || bind.mainIsPublicFlavor();
       if (!(isOutgoingOnly || bind.mainIsCanScreenRecording(prompt: false))) {
         return buildInstallCard("Permissions", "config_screen", "Configure",
             () async {

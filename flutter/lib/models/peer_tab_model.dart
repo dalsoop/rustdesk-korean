@@ -40,7 +40,9 @@ class PeerTabModel with ChangeNotifier {
   List<bool> isEnabled = List.from([
     true,
     true,
-    !isWeb && bind.mainGetLocalOption(key: "disable-discovery-panel") != "Y",
+    !isWeb &&
+        bind.mainGetLocalOption(key: "disable-discovery-panel") != "Y" &&
+        !bind.mainIsPublicFlavor(),
     !(bind.isDisableAb() || bind.isDisableAccount()),
     !(bind.isDisableGroupPanel() || bind.isDisableAccount()),
   ]);

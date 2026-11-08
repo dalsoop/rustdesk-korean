@@ -158,6 +158,30 @@ macOS 는 입력 소스 단축키(예: ⌃Space, 또는 Caps Lock 을 F18 로 �
 - 윈도우(설치판): 업데이트 버튼이나 자동 업데이트가 그 릴리스의 `.exe`/`.msi` 를 받아 설치합니다.
 - macOS·리눅스·안드로이드: 새 판 안내와 릴리스 페이지 링크만 보여 줍니다. 맥의 백그라운드 자동 설치는 이 포크에서 꺼져 있습니다(릴리스가 원본 설치기가 받는 `.dmg` 형식이 아니라서).
 
+## RustDesk Public (맥, 나가는 접속 전용 두 번째 앱)
+
+같은 소스를 빌드할 때 갈래를 골라 만드는 두 번째 맥 앱입니다(`RUSTDESK_FLAVOR=public python3 build.py --flutter ...`). 본 앱은 우리 서버와 우리 서버 계정에 묶여 있고, RustDesk 공용 서버는 조종하는 쪽의 공용 계정 로그인을 요구합니다. 앱 하나는 계정을 하나만 들 수 있어서 따로 둡니다.
+
+| 항목 | 본 앱 | RustDesk Public |
+|---|---|---|
+| 번들 ID | `com.carriez.rustdesk` | `net.ranode.rustdesk-public` |
+| 앱 이름(설정·소켓·로그 폴더) | `RustDesk` | `RustDeskPublic` |
+| URL 스킴 | `rustdesk` | `rustdeskpublic` |
+| 들어오는 접속 | 받음(우리 Mac 은 Tailscale 대역만 허용) | Tailscale 대역(100.64.0.0/10) 밖은 받지 않음, 직접 접속 포트 닫음. 빌드가 강제 |
+| 서비스·권한 요청 | 있음 | 없음 |
+
+홈 화면(Public 만):
+- 맨 위 `온프레미스 | 인터넷` 탭. 항상 온프레미스로 열립니다.
+- **온프레미스**: 프로필은 이 맥의 Tailscale 계정 프로필입니다(앱에 서버 주소나 키를 넣지 않습니다).
+  - 켜진 망의 기기를 모두 카드로 보여 주고, RustDesk 직접 접속 포트(21118)가 열렸는지 `접속 가능`/`접속 불가`/`확인 중`으로 표시합니다.
+  - 카드를 누르면 그 기기의 지금 Tailscale IP 로 바로 접속합니다. 접속받는 쪽은 `direct-server=Y` 가 필요합니다. 우리 Mac 은 dotfiles, pop-os 는 host-infra 가 켭니다.
+  - 켜지지 않은 망을 고르면 전환 버튼과 경고를 보여 주고, 확인을 받은 뒤에 Tailscale 프로필을 바꿉니다.
+  - 최근·즐겨찾기는 망 + 기기 이름으로 기억합니다.
+- **인터넷**: 원래 홈 화면(공용 서버, 공용 계정)입니다. LAN 발견 탭과 Tailscale IP 기록은 빠집니다.
+- 처음 실행할 때 한 번, 이전 시험판이 남긴 우리 서버 설정과 `@rustdesk.internal.kr` 기록을 지웁니다.
+
+업데이트 확인은 본 앱과 같습니다(같은 릴리스 태그, 릴리스 페이지 링크만).
+
 ## 릴리스 (Releasing)
 
 포크 릴리스 번호(ko.N)는 `flutter/pubspec.yaml` 의 `version:` 한 줄에서만 올립니다. 빌드 번호는 "원본 빌드 번호 × 100 + N" 입니다(원본 1.5.0 은 68 이라 ko.9 는 `1.5.0+6809`).
@@ -175,10 +199,13 @@ RustDesk 프로토콜 버전(`Cargo.toml` 의 `1.5.0`)은 원본과 같게 둡�
 
 순서:
 1. `version:` 줄의 끝 두 자리를 올리는 PR 을 기본 브랜치에 병합합니다.
-2. 맥: m5m2 에서 빌드하고, m5m1 에서 Developer ID(V2Z46YY386)로 서명·공증합니다(번들 ID `com.carriez.rustdesk` 그대로).
+2. 맥: m5m2 에서 빌드하고, m5m1 에서 Developer ID(V2Z46YY386)로 서명·공증합니다(번들 ID `com.carriez.rustdesk` 그대로). 같은 커밋으로 `RUSTDESK_FLAVOR=public` 빌드도 만들어 RustDesk Public 도 함께 냅니다. 서명·공증·zip 은 `res/osx-sign-notarize.sh <빌드된 .app> <zip 안 이름> <zip>` 로 합니다.
+   - 본 앱: `RustDesk.app` → `rustdesk-1.5.0-ko.N-macos-aarch64.zip`
+   - Public: `RustDeskPublic.app` → zip 안 이름 `RustDesk Public.app`, `rustdesk-public-1.5.0-ko.N-macos-aarch64.zip`
 3. 윈도우·리눅스: GitHub Actions `Build desktop (Korean fork, Windows/Linux x64)` 가 기본 브랜치 push 에서 돕니다.
 4. 안드로이드: gitlab `gujoai/apps/upstream-mono` 에 `rustdesk/` subtree 를 새 머리로 맞추는 MR 을 내면 pop-os 러너가 같은 서명 키로 APK 를 만듭니다.
-5. GitHub 릴리스 `1.5.0-ko.N` 에 네 플랫폼 파일과 `.sha256` 을 올립니다.
+5. GitHub 릴리스 `1.5.0-ko.N` 에 네 플랫폼 파일과 RustDesk Public zip, 각 `.sha256` 을 올립니다.
+   - 우리 Mac 설치: dotfiles `scripts/adhoc/install-rustdesk-fork.sh <zip> <sha256>`(본 앱), `--public <zip> <sha256>`(Public).
 6. pop-os 는 host-infra 의 `versions.rustdesk`(`1.5.0+koN`), sha256, 주소를 바꾸는 MR 로 올립니다.
 
 ## 라이선스
