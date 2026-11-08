@@ -76,6 +76,9 @@ fn cleanup_once() {
     if kept.len() != fav.len() {
         LocalConfig::set_fav(kept);
     }
+    if is_internal_peer_id(&LocalConfig::get_remote_id()) {
+        LocalConfig::set_remote_id("");
+    }
     LocalConfig::set_option(CLEANUP_DONE_OPTION.to_owned(), "Y".to_owned());
 }
 
