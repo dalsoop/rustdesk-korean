@@ -342,6 +342,13 @@ class _PublicHomePageState extends State<PublicHomePage> {
     });
     if (!ok) showToast(translate('Failed to switch the Tailscale profile'));
     await _refresh();
+    // The backend can take a few seconds to come up on the new tailnet.
+    for (var i = 0; ok && i < 8; i++) {
+      if (!mounted || _snapshot?.state == TailscaleState.running) break;
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) break;
+      await _refresh();
+    }
   }
 
   void _onCardTap(OnPremEntry entry, bool inactiveProfile) {

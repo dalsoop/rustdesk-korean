@@ -190,7 +190,7 @@ class Tailscale {
     process.stderr.drain<void>();
     try {
       final code = await process.exitCode.timeout(timeout);
-      return _CommandResult(code, await stdout);
+      return _CommandResult(code, await stdout.timeout(timeout));
     } on TimeoutException {
       process.kill();
       return null;

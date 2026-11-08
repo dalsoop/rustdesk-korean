@@ -44,7 +44,11 @@ ditto -c -k --keepParent "$stage/$name" "$tmp/submit.zip"
 xcrun notarytool submit "$tmp/submit.zip" --key "$tmp/key.p8" --key-id "$key_id" --issuer "$issuer" --wait
 rm -f "$tmp/key.p8"
 xcrun stapler staple "$stage/$name"
-spctl -a -vv -t exec "$stage/$name" 2>&1 | grep -q "Notarized Developer ID"
+verdict=$(spctl -a -vv -t exec "$stage/$name" 2>&1)
+case "$verdict" in
+  *"Notarized Developer ID"*) ;;
+  *) echo "not notarized: $verdict" >&2; exit 1 ;;
+esac
 
 rm -f "$zip"
 ditto -c -k --keepParent "$stage/$name" "$zip"
