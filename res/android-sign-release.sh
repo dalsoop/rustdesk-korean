@@ -31,16 +31,20 @@ out=${2:?output .apk}
 # First pass: re-run this script under bwsx so the four values exist only in its environment.
 if [ -z "${ANDROID_SIGN_RELEASE_INNER:-}" ]; then
   [ -f "$in" ] || { echo "no such file: $in" >&2; exit 1; }
-  bwsx=${BWSX:-$(command -v bwsx || true)}
+  # Newest installed plugin, not `command -v`: a session's PATH can still hold an older plugin's bin
+  # (0.3.0 reads the retired ~/.config/vault-ops).
+  bwsx=${BWSX:-}
   if [ -z "$bwsx" ]; then
-    for f in "$HOME"/.claude/plugins/cache/agent-secret-controller-skills/agent-secret-controller/*/bin/bwsx; do
-      [ -x "$f" ] && bwsx=$f
-    done
+    f=$(printf '%s\n' "$HOME"/.claude/plugins/cache/agent-secret-controller-skills/agent-secret-controller/*/bin/bwsx |
+      sort -V | tail -1)
+    if [ -x "$f" ]; then bwsx=$f; fi
   fi
   [ -n "$bwsx" ] || { echo "bwsx not found (agent-secret-controller plugin); set BWSX" >&2; exit 1; }
   bwsx_dir=$(dirname "$bwsx")
   export PATH="$bwsx_dir:$PATH" # bwsx calls bws-token next to it
-  export VAULT_OPS_SE_IDENTITY="${VAULT_OPS_SE_IDENTITY:-$HOME/.config/sops/age/m5m1-se.txt}"
+  # This Mac's Secure Enclave age identity, named like the dotfiles gh/glab wrappers do.
+  mac=$(hostname -s | tr '[:upper:]' '[:lower:]')
+  export AGENT_SECRET_SE_IDENTITY="${AGENT_SECRET_SE_IDENTITY:-$HOME/.config/sops/age/$mac-se.txt}"
   export ANDROID_SIGN_RELEASE_INNER=1
   self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
   exec "$bwsx" "${BWS_HANDLE:-ranode-m5m1}" run --project-id "$project_id" -- "$self" "$in" "$out"
