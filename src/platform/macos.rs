@@ -2125,3 +2125,22 @@ mod hotkey_flags_tests {
         assert_eq!(after(BASE | SHIFT, FN, 0), BASE | SHIFT);
     }
 }
+
+#[cfg(test)]
+mod server_agent_plist_tests {
+    #[test]
+    fn the_server_agent_restarts_after_any_exit() {
+        // With `KeepAlive = { SuccessfulExit = false }` a `--server` that exited
+        // with status 0 stayed down, and closing the main window then dropped
+        // remote access.
+        let plist = super::PRIVILEGES_SCRIPTS_DIR
+            .get_file("agent.plist")
+            .and_then(|f| f.contents_utf8())
+            .expect("agent.plist is embedded");
+        let keep_alive = plist
+            .split("<key>KeepAlive</key>")
+            .nth(1)
+            .expect("agent.plist sets KeepAlive");
+        assert!(keep_alive.trim_start().starts_with("<true />"));
+    }
+}
