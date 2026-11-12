@@ -13,6 +13,7 @@ import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
 import 'package:flutter_hbb/desktop/pages/public_home.dart';
+import 'package:flutter_hbb/desktop/pages/public_onboarding.dart';
 import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
@@ -77,6 +78,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   Widget buildLeftPane(BuildContext context) {
+    if (bind.mainIsPublicFlavor()) return buildPublicLeftPane(context);
     final isIncomingOnly = bind.isIncomingOnly();
     final isOutgoingOnly = bind.isOutgoingOnly();
     final children = <Widget>[
@@ -174,6 +176,28 @@ class _DesktopHomePageState extends State<DesktopHomePage>
                 ),
               )
           ],
+        ),
+      ),
+    );
+  }
+
+  // Korean fork, Public flavor: it only makes outgoing connections, so the
+  // incoming ID and one-time password are left out.
+  Widget buildPublicLeftPane(BuildContext context) {
+    return ChangeNotifierProvider.value(
+      value: gFFI.serverModel,
+      child: Container(
+        width: 200.0,
+        color: Theme.of(context).colorScheme.background,
+        child: SingleChildScrollView(
+          controller: _leftPaneScrollController,
+          child: Column(
+            children: [
+              Align(alignment: Alignment.center, child: loadLogo()),
+              const PublicIntroCard(),
+              Obx(() => buildHelpCards(stateGlobal.updateUrl.value)),
+            ],
+          ),
         ),
       ),
     );
@@ -490,7 +514,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           watchIsProcessTrust = true;
         }, help: 'Help', link: translate("doc_mac_permission"));
       } else if (!bind.mainIsCanInputMonitoring(prompt: false)) {
-        return buildInstallCard("Permissions", "config_input", "Configure",
+        return buildInstallCard(
+            "Permissions",
+            bind.mainIsPublicFlavor() ? "public_config_input" : "config_input",
+            "Configure",
             () async {
           bind.mainIsCanInputMonitoring(prompt: true);
           watchIsInputMonitoring = true;
