@@ -118,7 +118,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
       _pendingChecks = 0;
     });
     if (snapshot.state != TailscaleState.running) return;
-    final tailnet = _recordProfile.tailnet;
+    // The devices belong to the running tailnet, whichever profile is picked.
+    final tailnet = snapshot.activeProfile?.tailnet ?? '';
     for (final d in snapshot.devices) {
       final ip = d.ipv4;
       if (ip == null) {
@@ -411,8 +412,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
   List<Widget> _buildSection(BuildContext context, OnPremSection section,
       List<OnPremEntry> entries, bool searching) {
     final theme = Theme.of(context);
-    final open =
-        searching || _kFoldedByDefault.contains(section) == _flipped.contains(section);
+    final open = searching ||
+        _kFoldedByDefault.contains(section) == _flipped.contains(section);
     final (IconData icon, Color color, String title) = switch (section) {
       OnPremSection.favorites => (Icons.star, Colors.amber, 'Favorites'),
       OnPremSection.ready => (
@@ -511,7 +512,13 @@ class _PublicHomePageState extends State<PublicHomePage> {
         _rustDeskState(device) != _RustDeskState.checking) {
       return null;
     }
-    return _memos.get(_recordProfile.tailnet, device.name)?.state;
+    final remembered = _memos.get(_recordProfile.tailnet, device.name)?.state;
+    // The port check already failed; only the probe can still tell which.
+    if (remembered == OnPremRustDesk.reachable &&
+        _reach[device.id] == RustDeskReachability.unreachable) {
+      return null;
+    }
+    return remembered;
   }
 
   String _rustDeskIdOf(TailscaleDevice device) {
