@@ -49,4 +49,48 @@ void main() {
         ['build']);
     expect(onPremRecordsFor(records, 'gone.example'), isEmpty);
   });
+
+  test('devices sort into RustDesk sections and remembered results survive',
+      () {
+    final records = toggleOnPremFavorite([], _home, 'fav', '100.64.0.4');
+    const offline = TailscaleDevice(
+        id: 'o', name: 'old', os: 'windows', online: false, ipv4: '100.64.0.8');
+    final entries = buildOnPremEntries([
+      _device('fav', '100.64.0.4'),
+      _device('mac', '100.64.0.5'),
+      offline,
+    ], records);
+    final byName = {for (final e in entries) e.name: e};
+
+    expect(onPremSectionOf(byName['fav']!, OnPremRustDesk.missing),
+        OnPremSection.favorites);
+    expect(onPremSectionOf(byName['mac']!, OnPremRustDesk.reachable),
+        OnPremSection.ready);
+    expect(onPremSectionOf(byName['mac']!, OnPremRustDesk.directOff),
+        OnPremSection.directOff);
+    expect(onPremSectionOf(byName['mac']!, OnPremRustDesk.missing),
+        OnPremSection.missing);
+    expect(onPremSectionOf(byName['mac']!, null), OnPremSection.checking);
+    expect(onPremSectionOf(byName['old']!, OnPremRustDesk.directOff),
+        OnPremSection.offline);
+
+    expect(onPremDeviceKindOf('macOS'), OnPremDeviceKind.computer);
+    expect(onPremDeviceKindOf('linux'), OnPremDeviceKind.server);
+    expect(onPremDeviceKindOf('android'), OnPremDeviceKind.mobile);
+
+    expect(onPremEntryMatches(byName['mac']!, '0.5'), isTrue);
+    expect(onPremEntryMatches(byName['mac']!, '158 970', rustDeskId: '1589700753'),
+        isTrue);
+    expect(onPremEntryMatches(byName['mac']!, 'old'), isFalse);
+
+    final memos = OnPremRustDeskMemos.decode('');
+    expect(
+        memos.put(_home.tailnet, 'mac',
+            const OnPremRustDeskMemo(state: OnPremRustDesk.reachable, id: '42')),
+        isTrue);
+    final back = OnPremRustDeskMemos.decode(memos.encode());
+    expect(back.get(_home.tailnet, 'mac'),
+        const OnPremRustDeskMemo(state: OnPremRustDesk.reachable, id: '42'));
+    expect(back.get(_work.tailnet, 'mac'), isNull);
+  });
 }

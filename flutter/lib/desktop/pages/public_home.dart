@@ -4,7 +4,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
+import 'package:flutter_hbb/common/formatter/id_formatter.dart';
 import 'package:flutter_hbb/common/public_onprem.dart';
 import 'package:flutter_hbb/common/tailscale.dart';
 import 'package:flutter_hbb/consts.dart';
@@ -13,7 +15,11 @@ import 'package:flutter_hbb/desktop/pages/public_onboarding.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:get/get.dart';
 
-const double _kCardWidth = 220;
+const double _kCardWidth = 240;
+const Set<OnPremSection> _kFoldedByDefault = {
+  OnPremSection.missing,
+  OnPremSection.offline,
+};
 const double _kStatusBarHeight = 42;
 // While Tailscale is not usable yet, so the guide moves on by itself once the
 // user has installed, turned on or signed in to it.
@@ -38,7 +44,12 @@ class _PublicHomePageState extends State<PublicHomePage> {
   TailscaleSnapshot? _snapshot;
   bool _loading = false;
   bool _switching = false;
-  bool _showOthers = false;
+  // Sections the user opened or closed against their default.
+  final Set<OnPremSection> _flipped = {};
+  final TextEditingController _search = TextEditingController();
+  late final OnPremRustDeskMemos _memos;
+  int _pendingChecks = 0;
+  bool _memosDirty = false;
   Timer? _setupPoll;
   String? _selectedProfileId;
   int _readSeq = 0;
@@ -52,6 +63,9 @@ class _PublicHomePageState extends State<PublicHomePage> {
     super.initState();
     _records = decodeOnPremRecords(
         bind.getLocalFlutterOption(k: kOptionPublicOnPremRecords));
+    _memos = OnPremRustDeskMemos.decode(
+        bind.getLocalFlutterOption(k: kOptionPublicOnPremRustDeskMemos));
+    _search.addListener(() => setState(() {}));
     _refresh();
     _setupPoll = Timer.periodic(_kSetupPollInterval, (_) {
       final state = _snapshot?.state;
@@ -72,6 +86,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
   @override
   void dispose() {
     _setupPoll?.cancel();
+    _search.dispose();
     super.dispose();
   }
 
@@ -100,8 +115,11 @@ class _PublicHomePageState extends State<PublicHomePage> {
       }
       _reach.clear();
       _probe.clear();
+      _pendingChecks = 0;
     });
     if (snapshot.state != TailscaleState.running) return;
+    // The devices belong to the running tailnet, whichever profile is picked.
+    final tailnet = snapshot.activeProfile?.tailnet ?? '';
     for (final d in snapshot.devices) {
       final ip = d.ipv4;
       if (ip == null) {
@@ -109,16 +127,20 @@ class _PublicHomePageState extends State<PublicHomePage> {
         continue;
       }
       _reach[d.id] = RustDeskReachability.checking;
+      _pendingChecks++;
       Tailscale.checkRustDesk(ip).then((result) {
         if (!mounted || seq != _readSeq) return;
         setState(() => _reach[d.id] = result);
+        _settle(d, tailnet);
       });
       // An offline peer cannot answer; skipping it keeps the bridge's
       // worker threads free for the peers that can.
       if (!d.online) continue;
+      _pendingChecks++;
       bind.mainPublicProbeRustdesk(ip: ip).then((out) {
         if (!mounted || seq != _readSeq) return;
         setState(() => _probe[d.id] = parseRustDeskProbe(out));
+        _settle(d, tailnet);
       });
     }
     setState(() {});
@@ -273,6 +295,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
         Row(
           children: [
             if (snapshot.profiles.isNotEmpty) _buildProfilePicker(snapshot),
+            if (snapshot.state == TailscaleState.running)
+              _buildSearchField().marginOnly(left: 12),
             const Spacer(),
             if (_loading)
               const SizedBox(
@@ -323,62 +347,209 @@ class _PublicHomePageState extends State<PublicHomePage> {
     if (entries.isEmpty) {
       return _buildGuide(TailscaleState.running);
     }
-    // Remembered devices and the ones that can (or may) take a connection
-    // come first; the rest would bury them on a tailnet full of servers.
-    final ready = <OnPremEntry>[];
-    final others = <OnPremEntry>[];
+    final query = _search.text.trim();
+    final groups = <OnPremSection, List<OnPremEntry>>{};
     for (final e in entries) {
-      (_isReady(e) ? ready : others).add(e);
+      final device = e.device;
+      final id = device == null ? '' : _rustDeskIdOf(device);
+      if (!onPremEntryMatches(e, query, rustDeskId: id)) continue;
+      final section = onPremSectionOf(
+          e, device == null ? null : _shownRustDesk(device));
+      groups.putIfAbsent(section, () => []).add(e);
     }
     final hint = TextStyle(fontSize: 13, color: Theme.of(context).hintColor);
+    final noneUsable = const [
+      OnPremSection.favorites,
+      OnPremSection.ready,
+      OnPremSection.directOff,
+      OnPremSection.checking,
+    ].every((s) => !groups.containsKey(s));
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (ready.isEmpty) Text(translate('public_no_ready_tip'), style: hint),
-          if (ready.isNotEmpty)
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: ready.map((e) => _buildCard(context, e)).toList(),
-            ),
-          if (others.isNotEmpty)
-            InkWell(
-              onTap: () => setState(() => _showOthers = !_showOthers),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(_showOthers ? Icons.expand_less : Icons.expand_more,
-                      size: 18),
-                  const SizedBox(width: 4),
-                  Text(translate('Other devices ({${others.length}})'),
-                      style: hint),
-                ],
-              ),
-            ).marginOnly(top: 16, bottom: 8),
-          if (others.isNotEmpty && _showOthers)
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: others.map((e) => _buildCard(context, e)).toList(),
-            ),
+          if (groups.isEmpty)
+            Text(translate('No devices match'), style: hint).marginOnly(top: 12),
+          if (groups.isNotEmpty && query.isEmpty && noneUsable)
+            Text(translate('public_no_ready_tip'), style: hint)
+                .marginOnly(top: 12),
+          for (final s in OnPremSection.values)
+            if (groups[s] != null)
+              ..._buildSection(context, s, groups[s]!, query.isNotEmpty),
         ],
       ),
     );
   }
 
-  bool _isReady(OnPremEntry entry) {
-    if (entry.record != null) return true;
-    final device = entry.device;
-    if (device == null) return false;
-    return switch (_rustDeskState(device)) {
-      _RustDeskState.reachable ||
-      _RustDeskState.directOff ||
-      _RustDeskState.checking =>
-        true,
-      _RustDeskState.missing || _RustDeskState.unreachable => false,
+  Widget _buildSearchField() {
+    return SizedBox(
+      width: 220,
+      child: TextField(
+        controller: _search,
+        style: const TextStyle(fontSize: 13),
+        decoration: InputDecoration(
+          isDense: true,
+          prefixIcon: const Icon(Icons.search, size: 18),
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 32, minHeight: 32),
+          hintText: translate('Search by name, IP or ID'),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          border: const OutlineInputBorder(),
+          suffixIcon: _search.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.clear, size: 16),
+                  splashRadius: 14,
+                  onPressed: _search.clear,
+                ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildSection(BuildContext context, OnPremSection section,
+      List<OnPremEntry> entries, bool searching) {
+    final theme = Theme.of(context);
+    final open = searching ||
+        _kFoldedByDefault.contains(section) == _flipped.contains(section);
+    final (IconData icon, Color color, String title) = switch (section) {
+      OnPremSection.favorites => (Icons.star, Colors.amber, 'Favorites'),
+      OnPremSection.ready => (
+          Icons.check_circle,
+          Colors.green,
+          'RustDesk installed, ready to connect'
+        ),
+      OnPremSection.directOff => (
+          Icons.do_not_disturb_on,
+          Colors.orange,
+          'RustDesk installed, direct access off'
+        ),
+      OnPremSection.checking => (
+          Icons.hourglass_empty,
+          theme.hintColor,
+          'Checking'
+        ),
+      OnPremSection.missing => (
+          Icons.remove_circle_outline,
+          Colors.redAccent,
+          'No RustDesk'
+        ),
+      OnPremSection.offline => (Icons.cloud_off, theme.hintColor, 'Offline'),
     };
+    final header = InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: searching
+          ? null
+          : () => setState(() {
+                if (!_flipped.remove(section)) _flipped.add(section);
+              }),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(open ? Icons.expand_more : Icons.chevron_right,
+                size: 18, color: theme.hintColor),
+            const SizedBox(width: 2),
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text('${translate(title)} (${entries.length})',
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    ).marginOnly(top: 14, bottom: 6);
+    if (!open) return [header];
+
+    Widget cards(List<OnPremEntry> list) => Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: list.map((e) => _buildCard(context, e)).toList(),
+        );
+    final byKind = <OnPremDeviceKind, List<OnPremEntry>>{};
+    for (final e in entries) {
+      byKind
+          .putIfAbsent(onPremDeviceKindOf(e.device?.os ?? ''), () => [])
+          .add(e);
+    }
+    if (byKind.length < 2) return [header, cards(entries)];
+    return [
+      header,
+      for (final k in OnPremDeviceKind.values)
+        if (byKind[k] != null) ...[
+          Text('${translate(_kindTitle(k))} (${byKind[k]!.length})',
+                  style: TextStyle(fontSize: 12, color: theme.hintColor))
+              .marginOnly(left: 4, top: 4, bottom: 6),
+          cards(byKind[k]!).marginOnly(bottom: 8),
+        ],
+    ];
+  }
+
+  String _kindTitle(OnPremDeviceKind kind) => switch (kind) {
+        OnPremDeviceKind.computer => 'Computers',
+        OnPremDeviceKind.server => 'Linux and servers',
+        OnPremDeviceKind.mobile => 'Phones and tablets',
+        OnPremDeviceKind.other => 'Other kinds',
+      };
+
+  OnPremRustDesk? _liveRustDesk(TailscaleDevice device) =>
+      switch (_rustDeskState(device)) {
+        _RustDeskState.reachable => OnPremRustDesk.reachable,
+        _RustDeskState.directOff => OnPremRustDesk.directOff,
+        _RustDeskState.missing => OnPremRustDesk.missing,
+        _ => null,
+      };
+
+  /// The live state, or the remembered one while an online device is still
+  /// being checked.
+  OnPremRustDesk? _shownRustDesk(TailscaleDevice device) {
+    final live = _liveRustDesk(device);
+    if (live != null) return live;
+    if (!device.online ||
+        _rustDeskState(device) != _RustDeskState.checking) {
+      return null;
+    }
+    final remembered = _memos.get(_recordProfile.tailnet, device.name)?.state;
+    // The port check already failed; only the probe can still tell which.
+    if (remembered == OnPremRustDesk.reachable &&
+        _reach[device.id] == RustDeskReachability.unreachable) {
+      return null;
+    }
+    return remembered;
+  }
+
+  String _rustDeskIdOf(TailscaleDevice device) {
+    final probed = _probe[device.id]?.id ?? '';
+    if (probed.isNotEmpty) return probed;
+    if (_shownRustDesk(device) == OnPremRustDesk.missing) return '';
+    return _memos.get(_recordProfile.tailnet, device.name)?.id ?? '';
+  }
+
+  /// Remembers a finished check and saves the memos once every check of this
+  /// read is done.
+  void _settle(TailscaleDevice device, String tailnet) {
+    final live = _liveRustDesk(device);
+    if (live != null) {
+      final probed = _probe[device.id]?.id ?? '';
+      final id = live == OnPremRustDesk.missing
+          ? ''
+          : (probed.isNotEmpty
+              ? probed
+              : _memos.get(tailnet, device.name)?.id ?? '');
+      if (_memos.put(
+          tailnet, device.name, OnPremRustDeskMemo(state: live, id: id))) {
+        _memosDirty = true;
+      }
+    }
+    _pendingChecks--;
+    if (_pendingChecks <= 0 && _memosDirty) {
+      _memosDirty = false;
+      bind.setLocalFlutterOption(
+          k: kOptionPublicOnPremRustDeskMemos, v: _memos.encode());
+    }
   }
 
   Widget _buildGuide(TailscaleState state) {
@@ -515,13 +686,13 @@ class _PublicHomePageState extends State<PublicHomePage> {
     final theme = Theme.of(context);
     final String subtitle;
     if (device == null) {
-      subtitle = inactiveProfile
-          ? (entry.record?.lastIp ?? '')
-          : translate('Not found in this network');
+      subtitle = inactiveProfile ? '' : translate('Not found in this network');
     } else {
-      subtitle = _tailscaleLine(device);
+      // An online device's path goes on its status line.
+      subtitle = device.online ? '' : _tailscaleLine(device);
     }
-    final rustDeskId = device == null ? null : _probe[device.id]?.id;
+    final ip = device?.ipv4 ?? entry.record?.lastIp ?? '';
+    final rustDeskId = device == null ? '' : _rustDeskIdOf(device);
     final card = Container(
       width: _kCardWidth,
       padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
@@ -541,15 +712,16 @@ class _PublicHomePageState extends State<PublicHomePage> {
                 Text(entry.name,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(subtitle,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: theme.hintColor)),
-                if (device != null) const SizedBox(height: 4),
-                if (device != null) _buildStates(device),
-                if (rustDeskId != null && rustDeskId.isNotEmpty)
-                  Text('${translate('ID')} $rustDeskId',
+                if (ip.isNotEmpty) _copyLine(theme, 'IP', ip, ip),
+                if (subtitle.isNotEmpty)
+                  Text(subtitle,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 12, color: theme.hintColor)),
+                if (device != null) const SizedBox(height: 4),
+                if (device != null) _buildStates(device),
+                if (rustDeskId.isNotEmpty)
+                  _copyLine(theme, translate('ID'), formatID(rustDeskId),
+                      rustDeskId),
               ],
             ),
           ),
@@ -602,7 +774,6 @@ class _PublicHomePageState extends State<PublicHomePage> {
       return translate('Last seen {${_formatTime(lastSeen)}}');
     }
     final parts = <String>[
-      if (device.ipv4 != null) device.ipv4!,
       if (device.curAddr.isNotEmpty)
         translate('Direct')
       else if (device.relay.isNotEmpty)
@@ -644,8 +815,43 @@ class _PublicHomePageState extends State<PublicHomePage> {
     return null;
   }
 
+  Widget _copyLine(ThemeData theme, String label, String shown, String value) {
+    return Row(
+      children: [
+        Flexible(
+          child: Text('$label $shown',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: theme.hintColor)),
+        ),
+        Tooltip(
+          message: translate('Copy'),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: value));
+              showToast(translate('Copied'));
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: Icon(Icons.copy, size: 13, color: theme.hintColor),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildStates(TailscaleDevice device) {
-    final (String label, Color color) = switch (_rustDeskState(device)) {
+    var state = _rustDeskState(device);
+    if (state == _RustDeskState.checking) {
+      state = switch (_shownRustDesk(device)) {
+        OnPremRustDesk.reachable => _RustDeskState.reachable,
+        OnPremRustDesk.directOff => _RustDeskState.directOff,
+        OnPremRustDesk.missing => _RustDeskState.missing,
+        null => _RustDeskState.checking,
+      };
+    }
+    final (String label, Color color) = switch (state) {
       _RustDeskState.reachable => ('Reachable', Colors.green),
       _RustDeskState.directOff => (
           'RustDesk installed, direct access off',
@@ -671,8 +877,14 @@ class _PublicHomePageState extends State<PublicHomePage> {
               ),
             ),
             const SizedBox(width: 4),
-            Text(translate(device.online ? 'Online' : 'Offline'),
-                style: const TextStyle(fontSize: 12)),
+            Flexible(
+              child: Text(
+                  device.online && _tailscaleLine(device).isNotEmpty
+                      ? '${translate('Online')} · ${_tailscaleLine(device)}'
+                      : translate(device.online ? 'Online' : 'Offline'),
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12)),
+            ),
           ],
         ),
         Text(translate(label),

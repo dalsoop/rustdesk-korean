@@ -868,6 +868,14 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_config_input", ""),
         ("Tailscale is not responding", ""),
         ("public_ts_not_responding_tip", ""),
+        ("RustDesk installed, ready to connect", ""),
+        ("No devices match", ""),
+        ("Search by name, IP or ID", ""),
+        ("Computers", ""),
+        ("Linux and servers", ""),
+        ("Phones and tablets", ""),
+        ("Other kinds", ""),
+        ("Copy", ""),
     ].iter().cloned().collect();
 }
 
