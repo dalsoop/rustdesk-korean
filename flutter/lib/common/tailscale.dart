@@ -12,7 +12,7 @@ const String _kTailscaleAppBinary =
 // GUI apps get a minimal PATH, so a Homebrew CLI would not be found through it.
 const List<String> _kExtraBinaryDirs = ['/opt/homebrew/bin', '/usr/local/bin'];
 
-enum TailscaleState { notFound, stopped, running }
+enum TailscaleState { notFound, stopped, needsLogin, needsApproval, running }
 
 enum RustDeskReachability { checking, reachable, unreachable }
 
@@ -152,9 +152,12 @@ TailscaleStatus parseTailscaleStatusJson(String output) {
   }
   if (decoded is! Map<String, dynamic>) return TailscaleStatus.notFound;
 
-  final state = decoded['BackendState'] == 'Running'
-      ? TailscaleState.running
-      : TailscaleState.stopped;
+  final state = switch (decoded['BackendState']) {
+    'Running' => TailscaleState.running,
+    'NeedsLogin' => TailscaleState.needsLogin,
+    'NeedsMachineAuth' => TailscaleState.needsApproval,
+    _ => TailscaleState.stopped,
+  };
 
   final self = decoded['Self'];
   final selfId = self is Map<String, dynamic> ? self['ID'] : null;
@@ -304,6 +307,16 @@ class Tailscale {
   static Future<bool> switchProfile(String profileId) async {
     final result = await _run(['switch', profileId], kTailscaleSwitchTimeout);
     return result != null && result.exitCode == 0;
+  }
+
+  /// Brings up the Tailscale app (standalone or App Store build alike).
+  static Future<bool> openApp() async {
+    try {
+      final result = await Process.run('/usr/bin/open', ['-a', 'Tailscale']);
+      return result.exitCode == 0;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<RustDeskReachability> checkRustDesk(

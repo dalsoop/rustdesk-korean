@@ -67,6 +67,15 @@ e4e8  urit245@gmail.com       urit245@gmail.com*
     expect(status.devices[1].ipv4, '100.64.0.3');
   });
 
+  test('status json tells sign-in and approval apart from a stopped Tailscale',
+      () {
+    TailscaleState stateOf(String backend) =>
+        parseTailscaleStatusJson('{"BackendState": "$backend"}').state;
+    expect(stateOf('NeedsLogin'), TailscaleState.needsLogin);
+    expect(stateOf('NeedsMachineAuth'), TailscaleState.needsApproval);
+    expect(stateOf('Stopped'), TailscaleState.stopped);
+  });
+
   test('status json gives each peer its Tailscale details', () {
     const output = '''
 {

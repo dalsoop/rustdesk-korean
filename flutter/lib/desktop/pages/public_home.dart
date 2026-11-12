@@ -1,17 +1,23 @@
 // Korean fork, RustDesk Public flavor: the right pane of the main window.
 // Tabs 온프레미스 (this Mac's Tailscale tailnets) | 인터넷 (stock ConnectionPage).
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/public_onprem.dart';
 import 'package:flutter_hbb/common/tailscale.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/connection_page.dart';
+import 'package:flutter_hbb/desktop/pages/public_onboarding.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:get/get.dart';
 
 const double _kCardWidth = 220;
 const double _kStatusBarHeight = 42;
+// While Tailscale is not usable yet, so the guide moves on by itself once the
+// user has installed, turned on or signed in to it.
+const Duration _kSetupPollInterval = Duration(seconds: 5);
 
 enum _RustDeskState { checking, reachable, directOff, missing, unreachable }
 
@@ -26,11 +32,14 @@ class _PublicHomePageState extends State<PublicHomePage> {
   static const int _onPremTab = 0;
   static const int _internetTab = 1;
 
-  // Always opens on 온프레미스; the tab is deliberately not remembered.
-  int _tab = _onPremTab;
+  // Opens on the tab chosen in the welcome guide (온프레미스 when none was
+  // chosen); later tab clicks are deliberately not remembered.
+  int _tab = publicStartsOnInternet ? _internetTab : _onPremTab;
   TailscaleSnapshot? _snapshot;
   bool _loading = false;
   bool _switching = false;
+  bool _showOthers = false;
+  Timer? _setupPoll;
   String? _selectedProfileId;
   int _readSeq = 0;
   final Map<String, RustDeskReachability> _reach = {};
@@ -44,6 +53,30 @@ class _PublicHomePageState extends State<PublicHomePage> {
     _records = decodeOnPremRecords(
         bind.getLocalFlutterOption(k: kOptionPublicOnPremRecords));
     _refresh();
+    _setupPoll = Timer.periodic(_kSetupPollInterval, (_) {
+      final state = _snapshot?.state;
+      if (_tab == _onPremTab &&
+          !_loading &&
+          !_switching &&
+          state != null &&
+          state != TailscaleState.running) {
+        _refresh();
+      }
+    });
+    if (!publicWelcomeDone) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => showPublicWelcome(_onWelcomeChoice));
+    }
+  }
+
+  @override
+  void dispose() {
+    _setupPoll?.cancel();
+    super.dispose();
+  }
+
+  void _onWelcomeChoice(bool internet) {
+    if (mounted) _selectTab(internet ? _internetTab : _onPremTab);
   }
 
   void _saveRecords(List<OnPremRecord> records) {
@@ -121,7 +154,12 @@ class _PublicHomePageState extends State<PublicHomePage> {
             index: _tab,
             children: [
               _buildOnPrem(context),
-              ConnectionPage(),
+              Column(
+                children: [
+                  const PublicInternetLoginBanner(),
+                  Expanded(child: ConnectionPage()),
+                ],
+              ),
             ],
           ),
         ),
@@ -184,8 +222,14 @@ class _PublicHomePageState extends State<PublicHomePage> {
       children: [
         tab(_onPremTab, 'On-premises'),
         tab(_internetTab, 'Internet'),
+        const Spacer(),
+        IconButton(
+          tooltip: translate('Show the welcome guide'),
+          icon: const Icon(Icons.help_outline, size: 20),
+          onPressed: () => showPublicWelcome(_onWelcomeChoice),
+        ),
       ],
-    ).marginOnly(left: 12, top: 8);
+    ).marginOnly(left: 12, right: 8, top: 8);
   }
 
   Widget _buildOnPremStatus() {
@@ -197,6 +241,10 @@ class _PublicHomePageState extends State<PublicHomePage> {
       text = translate('Tailscale: not found');
     } else if (snapshot.state == TailscaleState.stopped) {
       text = translate('Tailscale is turned off');
+    } else if (snapshot.state == TailscaleState.needsLogin) {
+      text = translate('Tailscale: sign-in needed');
+    } else if (snapshot.state == TailscaleState.needsApproval) {
+      text = translate('Tailscale: waiting for approval');
     } else {
       text = translate(
           'Tailscale: {${snapshot.activeProfile?.tailnet ?? ''}} connected');
@@ -217,7 +265,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
     if (snapshot.state == TailscaleState.notFound) {
-      return Center(child: Text(translate('Tailscale not found')));
+      return _buildGuide(snapshot.state);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,8 +311,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
   }
 
   Widget _buildDeviceArea(BuildContext context, TailscaleSnapshot snapshot) {
-    if (snapshot.state == TailscaleState.stopped) {
-      return Center(child: Text(translate('Tailscale is turned off')));
+    if (snapshot.state != TailscaleState.running) {
+      return _buildGuide(snapshot.state);
     }
     final selected = _selectedProfile;
     if (selected != null && !selected.active) {
@@ -273,15 +321,71 @@ class _PublicHomePageState extends State<PublicHomePage> {
     final entries = buildOnPremEntries(
         snapshot.devices, onPremRecordsFor(_records, _recordProfile.tailnet));
     if (entries.isEmpty) {
-      return Center(child: Text(translate('Empty')));
+      return _buildGuide(TailscaleState.running);
     }
+    // Remembered devices and the ones that can (or may) take a connection
+    // come first; the rest would bury them on a tailnet full of servers.
+    final ready = <OnPremEntry>[];
+    final others = <OnPremEntry>[];
+    for (final e in entries) {
+      (_isReady(e) ? ready : others).add(e);
+    }
+    final hint = TextStyle(fontSize: 13, color: Theme.of(context).hintColor);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: entries.map((e) => _buildCard(context, e)).toList(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (ready.isEmpty) Text(translate('public_no_ready_tip'), style: hint),
+          if (ready.isNotEmpty)
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: ready.map((e) => _buildCard(context, e)).toList(),
+            ),
+          if (others.isNotEmpty)
+            InkWell(
+              onTap: () => setState(() => _showOthers = !_showOthers),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(_showOthers ? Icons.expand_less : Icons.expand_more,
+                      size: 18),
+                  const SizedBox(width: 4),
+                  Text(translate('Other devices ({${others.length}})'),
+                      style: hint),
+                ],
+              ),
+            ).marginOnly(top: 16, bottom: 8),
+          if (others.isNotEmpty && _showOthers)
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: others.map((e) => _buildCard(context, e)).toList(),
+            ),
+        ],
       ),
+    );
+  }
+
+  bool _isReady(OnPremEntry entry) {
+    if (entry.record != null) return true;
+    final device = entry.device;
+    if (device == null) return false;
+    return switch (_rustDeskState(device)) {
+      _RustDeskState.reachable ||
+      _RustDeskState.directOff ||
+      _RustDeskState.checking =>
+        true,
+      _RustDeskState.missing || _RustDeskState.unreachable => false,
+    };
+  }
+
+  Widget _buildGuide(TailscaleState state) {
+    return PublicTailscaleGuide(
+      state: state,
+      onCheckAgain: _loading || _switching ? null : _refresh,
+      onUseInternet: () => _selectTab(_internetTab),
     );
   }
 
@@ -380,10 +484,13 @@ class _PublicHomePageState extends State<PublicHomePage> {
     }
     switch (_rustDeskState(device)) {
       case _RustDeskState.directOff:
-        showToast(translate('Turn on RustDesk direct access on this device'));
+        showPublicPeerHelp(entry.name, PublicPeerProblem.directOff);
         return;
       case _RustDeskState.missing:
-        showToast(translate('This device does not have RustDesk'));
+        showPublicPeerHelp(entry.name, PublicPeerProblem.missing);
+        return;
+      case _RustDeskState.unreachable:
+        showPublicPeerHelp(entry.name, PublicPeerProblem.offline);
         return;
       default:
         break;

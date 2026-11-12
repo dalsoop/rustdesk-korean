@@ -171,7 +171,12 @@ macOS 는 입력 소스 단축키(예: ⌃Space, 또는 Caps Lock 을 F18 로 �
 | 서비스·권한 요청 | 있음 | 없음 |
 
 홈 화면(Public 만):
-- 맨 위 `온프레미스 | 인터넷` 탭. 항상 온프레미스로 열립니다.
+- 맨 위 `온프레미스 | 인터넷` 탭.
+- First run (welcome guide): the first launch asks how the user will connect, "팀 기기에 접속" (on-prem, Tailscale) or "인터넷으로 접속" (public server, RustDesk ID). The choice becomes the tab the app opens on; "나중에" keeps 온프레미스. The `?` button at the right of the tab bar shows the guide again. Later tab clicks are not remembered. Local options: `public-welcome-done`, `public-start-tab`.
+- Left pane: the app makes outgoing connections only, so it shows "접속하는 쪽 전용" and a note to use the main RustDesk app for incoming access, instead of this Mac's ID and one-time password. The Input Monitoring card names "RustDesk Public" and the System Settings path.
+- On-prem tab without devices: each Tailscale state gets its own next step instead of one line of text: not installed (download link), turned off or signed out (open the Tailscale app; `NeedsLogin` is no longer reported as "turned off"), waiting for administrator approval (`NeedsMachineAuth`), and a tailnet with no other devices. Each offers "다시 확인" and a way to the internet tab. Until Tailscale is running, the tab checks again every 5 seconds.
+- Device list: remembered devices and devices whose RustDesk answers (or is still being checked) come first. Devices without RustDesk or offline devices are folded under "그 밖의 기기 (N대)". Clicking a card that cannot take a connection opens a dialog that says how to fix it on that device (turn on direct IP access, install RustDesk, bring the device online).
+- Internet tab: while no account is signed in, a banner explains that the public server needs a RustDesk account and offers the sign-in button.
 - **온프레미스**: 프로필은 이 맥의 Tailscale 계정 프로필입니다(앱에 서버 주소나 키를 넣지 않습니다).
   - 켜진 망의 기기를 모두 카드로 보여 주고, RustDesk 직접 접속 포트(21118)가 열렸는지 `접속 가능`/`접속 불가`/`확인 중`으로 표시합니다.
   - 카드를 누르면 그 기기의 지금 Tailscale IP 로 바로 접속합니다. 접속받는 쪽은 `direct-server=Y` 가 필요합니다. 우리 Mac 은 dotfiles, pop-os 는 host-infra 가 켭니다.
