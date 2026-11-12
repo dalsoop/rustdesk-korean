@@ -154,6 +154,127 @@ class OnPremEntry {
   String? get connectIp => device?.ipv4;
 }
 
+const String kOptionPublicOnPremRustDeskMemos = 'public-onprem-rustdesk-memos';
+
+/// A device's RustDesk as the last finished check saw it.
+enum OnPremRustDesk { reachable, directOff, missing }
+
+class OnPremRustDeskMemo {
+  final OnPremRustDesk state;
+  final String id;
+
+  const OnPremRustDeskMemo({required this.state, this.id = ''});
+
+  @override
+  bool operator ==(Object other) =>
+      other is OnPremRustDeskMemo && other.state == state && other.id == id;
+
+  @override
+  int get hashCode => Object.hash(state, id);
+}
+
+/// Last check results per tailnet and device name, so the list opens already
+/// sorted while the new checks run.
+class OnPremRustDeskMemos {
+  final Map<String, OnPremRustDeskMemo> _byKey;
+
+  OnPremRustDeskMemos._(this._byKey);
+
+  static String _key(String tailnet, String deviceName) =>
+      '$tailnet\n$deviceName';
+
+  static OnPremRustDeskMemos decode(String text) {
+    final memos = <String, OnPremRustDeskMemo>{};
+    try {
+      final decoded = text.isEmpty ? null : jsonDecode(text);
+      if (decoded is Map<String, dynamic>) {
+        for (final e in decoded.entries) {
+          final v = e.value;
+          if (v is! Map<String, dynamic>) continue;
+          OnPremRustDesk? state;
+          for (final s in OnPremRustDesk.values) {
+            if (s.name == v['state']) state = s;
+          }
+          if (state == null) continue;
+          memos[e.key] =
+              OnPremRustDeskMemo(state: state, id: (v['id'] as String?) ?? '');
+        }
+      }
+    } catch (_) {}
+    return OnPremRustDeskMemos._(memos);
+  }
+
+  String encode() => jsonEncode(_byKey.map(
+      (k, v) => MapEntry(k, {'state': v.state.name, 'id': v.id})));
+
+  OnPremRustDeskMemo? get(String tailnet, String deviceName) =>
+      _byKey[_key(tailnet, deviceName)];
+
+  /// Returns whether anything changed.
+  bool put(String tailnet, String deviceName, OnPremRustDeskMemo memo) {
+    final key = _key(tailnet, deviceName);
+    if (_byKey[key] == memo) return false;
+    _byKey[key] = memo;
+    return true;
+  }
+}
+
+/// Home sections, in display order.
+enum OnPremSection { favorites, ready, directOff, checking, missing, offline }
+
+/// [rustDesk] is the device's RustDesk state now, or the remembered one while
+/// it is being checked again; null when nothing is known yet.
+OnPremSection onPremSectionOf(OnPremEntry entry, OnPremRustDesk? rustDesk) {
+  if (entry.isFavorite) return OnPremSection.favorites;
+  final device = entry.device;
+  if (device == null) return OnPremSection.offline;
+  if (rustDesk == OnPremRustDesk.reachable) return OnPremSection.ready;
+  if (!device.online || device.ipv4 == null) return OnPremSection.offline;
+  return switch (rustDesk) {
+    OnPremRustDesk.directOff => OnPremSection.directOff,
+    OnPremRustDesk.missing => OnPremSection.missing,
+    _ => OnPremSection.checking,
+  };
+}
+
+/// Device groups inside a section, in display order.
+enum OnPremDeviceKind { computer, server, mobile, other }
+
+OnPremDeviceKind onPremDeviceKindOf(String os) {
+  switch (os.toLowerCase()) {
+    case 'macos':
+    case 'windows':
+      return OnPremDeviceKind.computer;
+    case 'linux':
+    case 'freebsd':
+    case 'openbsd':
+      return OnPremDeviceKind.server;
+    case 'android':
+    case 'ios':
+      return OnPremDeviceKind.mobile;
+    default:
+      return OnPremDeviceKind.other;
+  }
+}
+
+/// Matches the name, DNS name, Tailscale IPs or RustDesk ID; spaces are
+/// ignored so a formatted ID ("158 970 0753") still matches.
+bool onPremEntryMatches(OnPremEntry entry, String query,
+    {String rustDeskId = ''}) {
+  String norm(String s) => s.toLowerCase().replaceAll(' ', '');
+  final q = norm(query);
+  if (q.isEmpty) return true;
+  final device = entry.device;
+  return [
+    entry.name,
+    device?.dnsName ?? '',
+    device?.ipv4 ?? '',
+    ...?device?.ips,
+    entry.record?.lastIp ?? '',
+    rustDeskId,
+  ].any((field) => norm(field).contains(q));
+}
+
 /// Remembered devices first (in [records] order), then the rest of [devices].
 List<OnPremEntry> buildOnPremEntries(
     List<TailscaleDevice> devices, List<OnPremRecord> records) {
