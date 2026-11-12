@@ -125,7 +125,8 @@ class PublicIntroCard extends StatelessWidget {
 /// [TailscaleState.running] when the tailnet simply has no other device.
 class PublicTailscaleGuide extends StatelessWidget {
   final TailscaleState state;
-  final VoidCallback onCheckAgain;
+  // Null while a read is already running.
+  final VoidCallback? onCheckAgain;
   final VoidCallback onUseInternet;
 
   const PublicTailscaleGuide({
@@ -138,7 +139,14 @@ class PublicTailscaleGuide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // notFound also covers a CLI that did not answer in time.
+    final installed = Tailscale.findBinary() != null;
     final (IconData icon, String title, String tip) = switch (state) {
+      TailscaleState.notFound when installed => (
+          Icons.sync_problem,
+          'Tailscale is not responding',
+          'public_ts_not_responding_tip'
+        ),
       TailscaleState.notFound => (
           Icons.download_outlined,
           'Tailscale is not installed',
@@ -166,7 +174,8 @@ class PublicTailscaleGuide extends StatelessWidget {
         ),
     };
     final canOpenApp = state == TailscaleState.stopped ||
-        state == TailscaleState.needsLogin;
+        state == TailscaleState.needsLogin ||
+        (state == TailscaleState.notFound && installed);
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -191,7 +200,7 @@ class PublicTailscaleGuide extends StatelessWidget {
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: [
-                  if (state == TailscaleState.notFound)
+                  if (state == TailscaleState.notFound && !installed)
                     ElevatedButton(
                       onPressed: () =>
                           launchUrl(Uri.parse(_kTailscaleDownloadUrl)),

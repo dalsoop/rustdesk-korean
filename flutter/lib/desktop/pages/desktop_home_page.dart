@@ -189,15 +189,20 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       child: Container(
         width: 200.0,
         color: Theme.of(context).colorScheme.background,
-        child: SingleChildScrollView(
-          controller: _leftPaneScrollController,
-          child: Column(
-            children: [
-              Align(alignment: Alignment.center, child: loadLogo()),
-              const PublicIntroCard(),
-              Obx(() => buildHelpCards(stateGlobal.updateUrl.value)),
-            ],
-          ),
+        child: Column(
+          children: [
+            SingleChildScrollView(
+              controller: _leftPaneScrollController,
+              child: Column(
+                children: [
+                  Align(alignment: Alignment.center, child: loadLogo()),
+                  const PublicIntroCard(),
+                  Obx(() => buildHelpCards(stateGlobal.updateUrl.value)),
+                ],
+              ),
+            ),
+            Expanded(child: Container()),
+          ],
         ),
       ),
     );

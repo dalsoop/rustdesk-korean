@@ -297,5 +297,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_offline_help", "This device is offline or not connected to Tailscale. Turn it on and connect it to Tailscale, then try again."),
         ("public_internet_login_tip", "To connect over the internet, sign in with a RustDesk account, then enter the ID the other person gives you."),
         ("public_config_input", "To control the remote device with the keyboard, turn on \"RustDesk Public\" in System Settings → Privacy & Security → Input Monitoring."),
+        ("public_ts_not_responding_tip", "Tailscale is installed but did not answer. Open the Tailscale app, wait a moment and check again."),
     ].iter().cloned().collect();
 }

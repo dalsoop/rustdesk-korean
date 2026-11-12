@@ -866,6 +866,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_offline_help", ""),
         ("public_internet_login_tip", ""),
         ("public_config_input", ""),
+        ("Tailscale is not responding", ""),
+        ("public_ts_not_responding_tip", ""),
     ].iter().cloned().collect();
 }
 

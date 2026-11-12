@@ -384,7 +384,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
   Widget _buildGuide(TailscaleState state) {
     return PublicTailscaleGuide(
       state: state,
-      onCheckAgain: _loading || _switching ? () {} : _refresh,
+      onCheckAgain: _loading || _switching ? null : _refresh,
       onUseInternet: () => _selectTab(_internetTab),
     );
   }
