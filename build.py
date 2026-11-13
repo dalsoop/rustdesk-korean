@@ -973,13 +973,13 @@ def macos_app_bundle():
     return (PUBLIC_APP_NAME if RUSTDESK_FLAVOR == 'public' else 'RustDesk') + '.app'
 
 
-# Korean fork: the main (incoming) app shows as "RustDesk (ranode)" in Finder, Launchpad,
+# Korean fork: the main (incoming) app shows as "RustDesk (for korean)" in Finder, Launchpad,
 # Spotlight and the privacy settings, with a green badge, so it never looks like the official
 # RustDesk or like RustDesk (forked ranode). The bundle file must stay RustDesk.app (the service
 # plists, the updater and src/platform/macos.rs use /Applications/RustDesk.app), so this is a
 # localized display name: CFBundleDisplayName equals the file name and en.lproj/InfoPlist.strings
 # carries the shown name. Added after the build so the Public flavor never gets these resources.
-MAIN_APP_DISPLAY_NAME = 'RustDesk (ranode)'
+MAIN_APP_DISPLAY_NAME = 'RustDesk (for korean)'
 
 
 def brand_macos_main_app(app_path):
