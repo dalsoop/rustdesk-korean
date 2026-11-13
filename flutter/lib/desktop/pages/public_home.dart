@@ -258,12 +258,14 @@ class _PublicHomePageState extends State<PublicHomePage> {
         if (_tsInstalled) tab(_onPremTab, 'On-premises'),
         if (_tsInstalled) tab(_internetTab, 'Internet'),
         if (!_tsInstalled)
+          // Flexible must stay the Row's direct child: the margin goes inside it.
           Flexible(
             child: Text(translate('public_no_tailscale_hint'),
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 12, color: Theme.of(context).hintColor)),
-          ).marginOnly(left: 6, top: 12, bottom: 12),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 12, color: Theme.of(context).hintColor))
+                .marginOnly(left: 6, top: 12, bottom: 12),
+          ),
         const Spacer(),
         const PublicAppLabel(),
         IconButton(
