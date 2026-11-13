@@ -3021,7 +3021,10 @@ int versionCmp(String v1, String v2) {
 }
 
 String getWindowName({WindowType? overrideType}) {
-  final name = bind.mainGetAppNameSync();
+  // Korean fork: the Public flavor's app name has no space; titles show the display name.
+  final name = bind.mainIsPublicFlavor()
+      ? 'RustDesk Public'
+      : bind.mainGetAppNameSync();
   switch (overrideType ?? kWindowType) {
     case WindowType.Main:
       return name;

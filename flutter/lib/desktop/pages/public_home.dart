@@ -245,6 +245,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
         tab(_onPremTab, 'On-premises'),
         tab(_internetTab, 'Internet'),
         const Spacer(),
+        const PublicAppLabel(),
         IconButton(
           tooltip: translate('Show the welcome guide'),
           icon: const Icon(Icons.help_outline, size: 20),
