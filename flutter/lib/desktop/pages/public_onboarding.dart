@@ -9,6 +9,7 @@ import 'package:flutter_hbb/common/tailscale.dart';
 import 'package:flutter_hbb/common/widgets/login.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const String kOptionPublicWelcomeDone = 'public-welcome-done';
@@ -97,6 +98,40 @@ Widget _choiceCard(BuildContext context, IconData icon, String title,
       ),
     ),
   );
+}
+
+/// "RustDesk Public 1.5.0 (ko.N)" in the tab bar, so this window is never taken for the main
+/// RustDesk app. The fork build number is upstream build * 100 + N (pubspec.yaml).
+class PublicAppLabel extends StatelessWidget {
+  const PublicAppLabel({Key? key}) : super(key: key);
+
+  static final Future<String> _versionOnce = _version();
+
+  static Future<String> _version() async {
+    final version = await bind.mainGetVersion();
+    final build = int.tryParse((await PackageInfo.fromPlatform()).buildNumber);
+    return build != null && build >= 100 ? '$version (ko.${build % 100})' : version;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hint = Theme.of(context).hintColor;
+    return FutureBuilder<String>(
+      future: _versionOnce,
+      builder: (context, snapshot) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.public, size: 14, color: Color(0xFFFF8500)),
+          const SizedBox(width: 4),
+          const Text('RustDesk Public',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          if (snapshot.hasData) const SizedBox(width: 6),
+          if (snapshot.hasData)
+            Text(snapshot.data!, style: TextStyle(fontSize: 12, color: hint)),
+        ],
+      ),
+    );
+  }
 }
 
 /// Left pane text in place of the incoming ID and password board.

@@ -997,6 +997,10 @@ def build_flutter_dmg(version, features):
     system2(
         f'FLUTTER_XCODE_ARCHS={mac_arch} FLUTTER_XCODE_ONLY_ACTIVE_ARCH=YES flutter build macos --release')
     system2(f'cp -rf ../target/release/service ./build/macos/Build/Products/Release/{macos_app_bundle()}/Contents/MacOS/')
+    # Korean fork: RustDesk Public gets its own Dock/Finder icon (globe badge) so it never looks
+    # like the main app. The bundle is re-signed afterwards (res/osx-sign-notarize.sh).
+    if RUSTDESK_FLAVOR == 'public':
+        system2(f'cp -f macos/Runner/AppIconPublic.icns ./build/macos/Build/Products/Release/{macos_app_bundle()}/Contents/Resources/AppIcon.icns')
     '''
     system2(
         "create-dmg --volname \"RustDesk Installer\" --window-pos 200 120 --window-size 800 400 --icon-size 100 --app-drop-link 600 185 --icon RustDesk.app 200 190 --hide-extension RustDesk.app rustdesk.dmg ./build/macos/Build/Products/Release/RustDesk.app")

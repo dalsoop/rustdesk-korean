@@ -170,6 +170,8 @@ macOS 는 입력 소스 단축키(예: ⌃Space, 또는 Caps Lock 을 F18 로 �
 | 들어오는 접속 | 받음(우리 Mac 은 Tailscale 대역만 허용) | Tailscale 대역(100.64.0.0/10) 밖은 받지 않음, 직접 접속 포트 닫음. 빌드가 강제 |
 | 서비스·권한 요청 | 있음 | 없음 |
 
+Telling the two apps apart (Public only, from ko.16): RustDesk Public's icon carries an orange globe badge (`flutter/macos/Runner/AppIconPublic.icns`, copied over the bundle's `AppIcon.icns` by `build.py` for `RUSTDESK_FLAVOR=public`), its window titles read "RustDesk Public" instead of the app name `RustDeskPublic`, and the right end of its tab bar shows "RustDesk Public <version> (ko.N)". The main app is unchanged. Which app and version each of our machines has: dotfiles `scripts/adhoc/rustdesk-status.sh`.
+
 홈 화면(Public 만):
 - 맨 위 `온프레미스 | 인터넷` 탭.
 - First run (welcome guide): the first launch asks how the user will connect, "팀 기기에 접속" (on-prem, Tailscale) or "인터넷으로 접속" (public server, RustDesk ID). The choice becomes the tab the app opens on; "나중에" keeps 온프레미스. The `?` button at the right of the tab bar shows the guide again. Later tab clicks are not remembered. Local options: `public-welcome-done`, `public-start-tab`.
