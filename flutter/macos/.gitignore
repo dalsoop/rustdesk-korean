@@ -2,7 +2,7 @@
 **/Flutter/ephemeral/
 **/Pods/
 
-# Written by build.py for RUSTDESK_FLAVOR=public
+# Written by build.py for RUSTDESK_FLAVOR=connect
 Runner/Configs/Flavor.xcconfig
 
 # Xcode-related

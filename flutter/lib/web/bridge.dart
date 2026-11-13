@@ -1680,11 +1680,11 @@ class RustdeskImpl {
     return mainGetAppNameSync(hint: hint) != "RustDesk";
   }
 
-  bool mainIsPublicFlavor({dynamic hint}) {
+  bool mainIsConnectFlavor({dynamic hint}) {
     return false;
   }
 
-  Future<String> mainPublicProbeRustdesk({required String ip, dynamic hint}) {
+  Future<String> mainConnectProbeRustdesk({required String ip, dynamic hint}) {
     return Future.value('');
   }
 
