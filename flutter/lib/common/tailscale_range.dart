@@ -1,4 +1,4 @@
-// Korean fork, connect flavor ("RustDesk (for korean) 접속"). No dart:io here: the shared peer views
+// Korean fork, for-korean flavor ("RustDesk (for korean) 접속"). No dart:io here: the shared peer views
 // that use it are also compiled for web.
 
 /// True for an ID that is an IPv4 address (optionally with a port) in

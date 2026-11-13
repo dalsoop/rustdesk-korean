@@ -14,7 +14,7 @@ PRODUCT_BUNDLE_IDENTIFIER = com.carriez.flutterHbb
 PRODUCT_COPYRIGHT = Copyright © 2026 Purslane Tech Pte. Ltd. All rights reserved.
 
 // Korean fork: app identity per build flavor. build.py writes Flavor.xcconfig (git-ignored) only
-// for `RUSTDESK_FLAVOR=connect`; without it these are the main app's values.
+// for `RUSTDESK_FLAVOR=for-korean`; without it these are the main app's values.
 RUSTDESK_BUNDLE_IDENTIFIER = com.carriez.rustdesk
 RUSTDESK_DISPLAY_NAME = $(PRODUCT_NAME)
 RUSTDESK_URL_SCHEME = rustdesk

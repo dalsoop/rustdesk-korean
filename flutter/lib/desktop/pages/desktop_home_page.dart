@@ -12,8 +12,8 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
-import 'package:flutter_hbb/desktop/pages/connect_home.dart';
-import 'package:flutter_hbb/desktop/pages/connect_onboarding.dart';
+import 'package:flutter_hbb/desktop/pages/for_korean_home.dart';
+import 'package:flutter_hbb/desktop/pages/for_korean_onboarding.dart';
 import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
@@ -78,7 +78,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   Widget buildLeftPane(BuildContext context) {
-    if (bind.mainIsConnectFlavor()) return buildConnectLeftPane(context);
+    if (bind.mainIsForKoreanFlavor()) return buildForKoreanLeftPane(context);
     final isIncomingOnly = bind.isIncomingOnly();
     final isOutgoingOnly = bind.isOutgoingOnly();
     final children = <Widget>[
@@ -181,9 +181,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     );
   }
 
-  // Korean fork, connect flavor: it only makes outgoing connections, so the
+  // Korean fork, for-korean flavor: it only makes outgoing connections, so the
   // incoming ID and one-time password are left out.
-  Widget buildConnectLeftPane(BuildContext context) {
+  Widget buildForKoreanLeftPane(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: gFFI.serverModel,
       child: Container(
@@ -196,7 +196,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
               child: Column(
                 children: [
                   Align(alignment: Alignment.center, child: loadLogo()),
-                  const ConnectIntroCard(),
+                  const ForKoreanIntroCard(),
                   Obx(() => buildHelpCards(stateGlobal.updateUrl.value)),
                 ],
               ),
@@ -211,7 +211,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   buildRightPane(BuildContext context) {
     return Container(
       color: Theme.of(context).scaffoldBackgroundColor,
-      child: bind.mainIsConnectFlavor() ? ConnectHomePage() : ConnectionPage(),
+      child: bind.mainIsForKoreanFlavor() ? ForKoreanHomePage() : ConnectionPage(),
     );
   }
 
@@ -505,7 +505,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         });
       }
     } else if (isMacOS) {
-      final isOutgoingOnly = bind.isOutgoingOnly() || bind.mainIsConnectFlavor();
+      final isOutgoingOnly = bind.isOutgoingOnly() || bind.mainIsForKoreanFlavor();
       if (!(isOutgoingOnly || bind.mainIsCanScreenRecording(prompt: false))) {
         return buildInstallCard("Permissions", "config_screen", "Configure",
             () async {
@@ -521,8 +521,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       } else if (!bind.mainIsCanInputMonitoring(prompt: false)) {
         return buildInstallCard(
             "Permissions",
-            bind.mainIsConnectFlavor()
-                ? "connect_config_input_{$kConnectAppDisplayName}"
+            bind.mainIsForKoreanFlavor()
+                ? "for_korean_config_input_{$kForKoreanAppDisplayName}"
                 : "config_input",
             "Configure",
             () async {

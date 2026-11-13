@@ -42,7 +42,7 @@ class PeerTabModel with ChangeNotifier {
     true,
     !isWeb &&
         bind.mainGetLocalOption(key: "disable-discovery-panel") != "Y" &&
-        !bind.mainIsConnectFlavor(),
+        !bind.mainIsForKoreanFlavor(),
     !(bind.isDisableAb() || bind.isDisableAccount()),
     !(bind.isDisableGroupPanel() || bind.isDisableAccount()),
   ]);
