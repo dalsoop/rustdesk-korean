@@ -236,6 +236,87 @@ String _ownerLogin(Object? users, Object? userId) {
   return (user['LoginName'] as String?) ?? '';
 }
 
+/// Parses the LocalAPI `/localapi/v0/profiles/` list; [currentId] marks the
+/// active one.
+List<TailscaleProfile> parseLocalApiProfiles(String output, String? currentId) {
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(output);
+  } catch (_) {
+    return [];
+  }
+  if (decoded is! List) return [];
+  final profiles = <TailscaleProfile>[];
+  for (final p in decoded) {
+    if (p is! Map<String, dynamic>) continue;
+    final id = (p['ID'] as String?) ?? '';
+    if (id.isEmpty) continue;
+    final network = p['NetworkProfile'];
+    final user = p['UserProfile'];
+    final tailnet = network is Map<String, dynamic>
+        ? ((network['DomainName'] as String?) ?? '')
+        : '';
+    final account = user is Map<String, dynamic>
+        ? ((user['LoginName'] as String?) ?? '')
+        : ((p['Name'] as String?) ?? '');
+    profiles.add(TailscaleProfile(
+      id: id,
+      tailnet: tailnet,
+      account: account,
+      active: id == currentId,
+    ));
+  }
+  return profiles;
+}
+
+/// The macOS Tailscale app (standalone build) serves its LocalAPI on
+/// 127.0.0.1:<port> with a same-user token in /Library/Tailscale. Using it
+/// avoids running the app binary as a CLI from another app, which makes
+/// Tailscale try to launch a second GUI and show "The Tailscale GUI failed to
+/// start" (seen 2026-11-12 from the on-prem tab).
+class _MacLocalApi {
+  static const String _dir = '/Library/Tailscale';
+
+  static ({int port, String token})? _endpoint() {
+    if (!Platform.isMacOS) return null;
+    try {
+      final link = Link('$_dir/ipnport');
+      if (!link.existsSync()) return null;
+      final port = int.tryParse(link.targetSync().trim());
+      if (port == null) return null;
+      final token = File('$_dir/sameuserproof-$port').readAsStringSync().trim();
+      if (token.isEmpty) return null;
+      return (port: port, token: token);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool get available => _endpoint() != null;
+
+  /// Returns the body of a 200 reply, or null.
+  static Future<String?> call(String method, String path, Duration timeout) async {
+    final ep = _endpoint();
+    if (ep == null) return null;
+    final client = HttpClient()..connectionTimeout = timeout;
+    try {
+      final req = await client
+          .openUrl(method, Uri.parse('http://127.0.0.1:${ep.port}/localapi/v0/$path'))
+          .timeout(timeout);
+      req.headers.set(HttpHeaders.authorizationHeader,
+          'Basic ${base64Encode(utf8.encode(':${ep.token}'))}');
+      req.headers.set('Sec-Tailscale', 'localapi');
+      final res = await req.close().timeout(timeout);
+      final body = await res.transform(utf8.decoder).join().timeout(timeout);
+      return res.statusCode == 200 ? body : null;
+    } catch (_) {
+      return null;
+    } finally {
+      client.close(force: true);
+    }
+  }
+}
+
 class _CommandResult {
   final int exitCode;
   final String stdout;
@@ -277,6 +358,19 @@ class Tailscale {
   }
 
   static Future<List<TailscaleProfile>> listProfiles() async {
+    if (_MacLocalApi.available) {
+      final list =
+          await _MacLocalApi.call('GET', 'profiles/', kTailscaleCommandTimeout);
+      if (list == null) return [];
+      final current = await _MacLocalApi.call(
+          'GET', 'profiles/current', kTailscaleCommandTimeout);
+      String? currentId;
+      try {
+        final c = current == null ? null : jsonDecode(current);
+        if (c is Map<String, dynamic>) currentId = c['ID'] as String?;
+      } catch (_) {}
+      return parseLocalApiProfiles(list, currentId);
+    }
     final result = await _run(['switch', '--list'], kTailscaleCommandTimeout);
     if (result == null || result.exitCode != 0) return [];
     return parseTailscaleProfiles(result.stdout);
@@ -285,6 +379,17 @@ class Tailscale {
   /// A binary that runs but prints no status object counts as stopped;
   /// one that is missing or does not answer in time counts as not found.
   static Future<TailscaleStatus> readStatus() async {
+    if (_MacLocalApi.available) {
+      final body =
+          await _MacLocalApi.call('GET', 'status', kTailscaleCommandTimeout);
+      if (body == null) {
+        return const TailscaleStatus(state: TailscaleState.stopped, devices: []);
+      }
+      final status = parseTailscaleStatusJson(body);
+      return status.state == TailscaleState.notFound
+          ? const TailscaleStatus(state: TailscaleState.stopped, devices: [])
+          : status;
+    }
     final result = await _run(['status', '--json'], kTailscaleCommandTimeout);
     if (result == null) return TailscaleStatus.notFound;
     final status = parseTailscaleStatusJson(result.stdout);
@@ -305,6 +410,11 @@ class Tailscale {
   }
 
   static Future<bool> switchProfile(String profileId) async {
+    if (_MacLocalApi.available) {
+      return await _MacLocalApi.call('POST',
+              'profiles/${Uri.encodeComponent(profileId)}', kTailscaleSwitchTimeout) !=
+          null;
+    }
     final result = await _run(['switch', profileId], kTailscaleSwitchTimeout);
     return result != null && result.exitCode == 0;
   }

@@ -126,4 +126,24 @@ e4e8  urit245@gmail.com       urit245@gmail.com*
     expect(nas.tags, ['tag:server']);
     expect(nas.lastSeen, DateTime.utc(2026, 11, 7, 10));
   });
+
+  test('LocalAPI profiles list gives profiles with the current one marked', () {
+    const output = '''
+[
+  {"ID": "e4e8", "Name": "urit245@gmail.com",
+   "NetworkProfile": {"DomainName": "urit245@gmail.com"},
+   "UserProfile": {"LoginName": "urit245@gmail.com"}},
+  {"ID": "8a1d", "Name": "medicalo2026@gmail.com",
+   "NetworkProfile": {"DomainName": "medicalo2026@gmail.com"},
+   "UserProfile": {"LoginName": "medicalo2026@gmail.com"}}
+]
+''';
+    final profiles = parseLocalApiProfiles(output, '8a1d');
+    expect(profiles.map((p) => p.id), ['e4e8', '8a1d']);
+    expect(profiles[0].active, isFalse);
+    expect(profiles[1].active, isTrue);
+    expect(profiles[1].tailnet, 'medicalo2026@gmail.com');
+    expect(profiles[1].account, 'medicalo2026@gmail.com');
+    expect(parseLocalApiProfiles('not json', null), isEmpty);
+  });
 }
