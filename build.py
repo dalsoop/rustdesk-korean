@@ -963,7 +963,7 @@ PUBLIC_FLAVOR_XCCONFIG = f'''PRODUCT_NAME = {PUBLIC_APP_NAME}
 // MainMenu.xib names its classes in module RustDesk.
 PRODUCT_MODULE_NAME = RustDesk
 RUSTDESK_BUNDLE_IDENTIFIER = net.ranode.rustdesk-public
-RUSTDESK_DISPLAY_NAME = RustDesk Public
+RUSTDESK_DISPLAY_NAME = RustDesk (forked ranode)
 RUSTDESK_URL_SCHEME = rustdeskpublic
 '''
 

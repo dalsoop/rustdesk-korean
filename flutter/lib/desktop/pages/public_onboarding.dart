@@ -40,7 +40,7 @@ void showPublicWelcome(void Function(bool internet) onChoose) {
 
     final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
     return CustomAlertDialog(
-      title: Text(translate('Welcome to RustDesk Public')),
+      title: Text(translate('Welcome to {$kPublicAppDisplayName}')),
       contentBoxConstraints: const BoxConstraints(maxWidth: 460),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -100,7 +100,7 @@ Widget _choiceCard(BuildContext context, IconData icon, String title,
   );
 }
 
-/// "RustDesk Public 1.5.0 (ko.N)" in the tab bar, so this window is never taken for the main
+/// "RustDesk (forked ranode) 1.5.0 (ko.N)" in the tab bar, so this window is never taken for the main
 /// RustDesk app. The fork build number is upstream build * 100 + N (pubspec.yaml).
 class PublicAppLabel extends StatelessWidget {
   const PublicAppLabel({Key? key}) : super(key: key);
@@ -123,7 +123,7 @@ class PublicAppLabel extends StatelessWidget {
         children: [
           const Icon(Icons.public, size: 14, color: Color(0xFFFF8500)),
           const SizedBox(width: 4),
-          const Text('RustDesk Public',
+          const Text(kPublicAppDisplayName,
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           if (snapshot.hasData) const SizedBox(width: 6),
           if (snapshot.hasData)
