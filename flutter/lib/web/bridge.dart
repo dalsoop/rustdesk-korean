@@ -1680,11 +1680,11 @@ class RustdeskImpl {
     return mainGetAppNameSync(hint: hint) != "RustDesk";
   }
 
-  bool mainIsConnectFlavor({dynamic hint}) {
+  bool mainIsForKoreanFlavor({dynamic hint}) {
     return false;
   }
 
-  Future<String> mainConnectProbeRustdesk({required String ip, dynamic hint}) {
+  Future<String> mainForKoreanProbeRustdesk({required String ip, dynamic hint}) {
     return Future.value('');
   }
 

@@ -1,4 +1,4 @@
-// Korean fork, connect flavor ("RustDesk (for korean) 접속"): the right pane of the main window.
+// Korean fork, for-korean flavor ("RustDesk (for korean) 접속"): the right pane of the main window.
 // Tabs 온프레미스 (this Mac's Tailscale tailnets) | 인터넷 (stock ConnectionPage).
 
 import 'dart:async';
@@ -7,11 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/formatter/id_formatter.dart';
-import 'package:flutter_hbb/common/connect_onprem.dart';
+import 'package:flutter_hbb/common/for_korean_onprem.dart';
 import 'package:flutter_hbb/common/tailscale.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/connection_page.dart';
-import 'package:flutter_hbb/desktop/pages/connect_onboarding.dart';
+import 'package:flutter_hbb/desktop/pages/for_korean_onboarding.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:get/get.dart';
 
@@ -27,20 +27,20 @@ const Duration _kSetupPollInterval = Duration(seconds: 5);
 
 enum _RustDeskState { checking, reachable, directOff, missing, unreachable }
 
-class ConnectHomePage extends StatefulWidget {
-  const ConnectHomePage({Key? key}) : super(key: key);
+class ForKoreanHomePage extends StatefulWidget {
+  const ForKoreanHomePage({Key? key}) : super(key: key);
 
   @override
-  State<ConnectHomePage> createState() => _ConnectHomePageState();
+  State<ForKoreanHomePage> createState() => _ForKoreanHomePageState();
 }
 
-class _ConnectHomePageState extends State<ConnectHomePage> {
+class _ForKoreanHomePageState extends State<ForKoreanHomePage> {
   static const int _onPremTab = 0;
   static const int _internetTab = 1;
 
   // Opens on the tab chosen in the welcome guide (온프레미스 when none was
   // chosen); later tab clicks are deliberately not remembered.
-  int _tab = connectStartsOnInternet ? _internetTab : _onPremTab;
+  int _tab = forKoreanStartsOnInternet ? _internetTab : _onPremTab;
   // Without Tailscale on this Mac the on-prem tab is hidden and the home is the
   // internet tab alone; it appears by itself once Tailscale is installed.
   bool _tsInstalled = Tailscale.findBinary() != null;
@@ -66,9 +66,9 @@ class _ConnectHomePageState extends State<ConnectHomePage> {
   void initState() {
     super.initState();
     _records = decodeOnPremRecords(
-        bind.getLocalFlutterOption(k: kOptionConnectOnPremRecords));
+        bind.getLocalFlutterOption(k: kOptionForKoreanOnPremRecords));
     _memos = OnPremRustDeskMemos.decode(
-        bind.getLocalFlutterOption(k: kOptionConnectOnPremRustDeskMemos));
+        bind.getLocalFlutterOption(k: kOptionForKoreanOnPremRustDeskMemos));
     _search.addListener(() => setState(() {}));
     _refresh();
     _setupPoll = Timer.periodic(_kSetupPollInterval, (_) {
@@ -88,8 +88,8 @@ class _ConnectHomePageState extends State<ConnectHomePage> {
         _refresh();
       }
     });
-    if (!connectWelcomeDone) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => showConnectWelcome(
+    if (!forKoreanWelcomeDone) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => showForKoreanWelcome(
           _onWelcomeChoice,
           teamDevices: _tsInstalled));
     }
@@ -109,7 +109,7 @@ class _ConnectHomePageState extends State<ConnectHomePage> {
   void _saveRecords(List<OnPremRecord> records) {
     setState(() => _records = records);
     bind.setLocalFlutterOption(
-        k: kOptionConnectOnPremRecords, v: encodeOnPremRecords(records));
+        k: kOptionForKoreanOnPremRecords, v: encodeOnPremRecords(records));
   }
 
   Future<void> _refresh() async {
@@ -150,7 +150,7 @@ class _ConnectHomePageState extends State<ConnectHomePage> {
       // worker threads free for the peers that can.
       if (!d.online) continue;
       _pendingChecks++;
-      bind.mainConnectProbeRustdesk(ip: ip).then((out) {
+      bind.mainForKoreanProbeRustdesk(ip: ip).then((out) {
         if (!mounted || seq != _readSeq) return;
         setState(() => _probe[d.id] = parseRustDeskProbe(out));
         _settle(d, tailnet);
@@ -191,7 +191,7 @@ class _ConnectHomePageState extends State<ConnectHomePage> {
               _buildOnPrem(context),
               Column(
                 children: [
-                  const ConnectInternetLoginBanner(),
+                  const ForKoreanInternetLoginBanner(),
                   Expanded(child: ConnectionPage()),
                 ],
               ),
@@ -260,19 +260,19 @@ class _ConnectHomePageState extends State<ConnectHomePage> {
         if (!_tsInstalled)
           // Flexible must stay the Row's direct child: the margin goes inside it.
           Flexible(
-            child: Text(translate('connect_no_tailscale_hint'),
+            child: Text(translate('for_korean_no_tailscale_hint'),
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         fontSize: 12, color: Theme.of(context).hintColor))
                 .marginOnly(left: 6, top: 12, bottom: 12),
           ),
         const Spacer(),
-        const ConnectAppLabel(),
+        const ForKoreanAppLabel(),
         IconButton(
           tooltip: translate('Show the welcome guide'),
           icon: const Icon(Icons.help_outline, size: 20),
           onPressed: () =>
-              showConnectWelcome(_onWelcomeChoice, teamDevices: _tsInstalled),
+              showForKoreanWelcome(_onWelcomeChoice, teamDevices: _tsInstalled),
         ),
       ],
     ).marginOnly(left: 12, right: 8, top: 8);
@@ -396,7 +396,7 @@ class _ConnectHomePageState extends State<ConnectHomePage> {
           if (groups.isEmpty)
             Text(translate('No devices match'), style: hint).marginOnly(top: 12),
           if (groups.isNotEmpty && query.isEmpty && noneUsable)
-            Text(translate('connect_no_ready_tip'), style: hint)
+            Text(translate('for_korean_no_ready_tip'), style: hint)
                 .marginOnly(top: 12),
           for (final s in OnPremSection.values)
             if (groups[s] != null)
@@ -572,12 +572,12 @@ class _ConnectHomePageState extends State<ConnectHomePage> {
     if (_pendingChecks <= 0 && _memosDirty) {
       _memosDirty = false;
       bind.setLocalFlutterOption(
-          k: kOptionConnectOnPremRustDeskMemos, v: _memos.encode());
+          k: kOptionForKoreanOnPremRustDeskMemos, v: _memos.encode());
     }
   }
 
   Widget _buildGuide(TailscaleState state) {
-    return ConnectTailscaleGuide(
+    return ForKoreanTailscaleGuide(
       state: state,
       onCheckAgain: _loading || _switching ? null : _refresh,
       onUseInternet: () => _selectTab(_internetTab),
@@ -679,13 +679,13 @@ class _ConnectHomePageState extends State<ConnectHomePage> {
     }
     switch (_rustDeskState(device)) {
       case _RustDeskState.directOff:
-        showConnectPeerHelp(entry.name, ConnectPeerProblem.directOff);
+        showForKoreanPeerHelp(entry.name, ForKoreanPeerProblem.directOff);
         return;
       case _RustDeskState.missing:
-        showConnectPeerHelp(entry.name, ConnectPeerProblem.missing);
+        showForKoreanPeerHelp(entry.name, ForKoreanPeerProblem.missing);
         return;
       case _RustDeskState.unreachable:
-        showConnectPeerHelp(entry.name, ConnectPeerProblem.offline);
+        showForKoreanPeerHelp(entry.name, ForKoreanPeerProblem.offline);
         return;
       default:
         break;
