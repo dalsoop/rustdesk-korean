@@ -5,6 +5,7 @@ import glob
 import contextlib
 import pathlib
 import platform
+import plistlib
 import zipfile
 import urllib.request
 import shutil
@@ -972,6 +973,32 @@ def macos_app_bundle():
     return (PUBLIC_APP_NAME if RUSTDESK_FLAVOR == 'public' else 'RustDesk') + '.app'
 
 
+# Korean fork: the main (incoming) app shows as "RustDesk Host (ranode)" in Finder, Launchpad,
+# Spotlight and the privacy settings, with a house badge, so it never looks like the official
+# RustDesk or like RustDesk (forked ranode). The bundle file must stay RustDesk.app (the service
+# plists, the updater and src/platform/macos.rs use /Applications/RustDesk.app), so this is a
+# localized display name: CFBundleDisplayName equals the file name and en.lproj/InfoPlist.strings
+# carries the shown name. Added after the build so the Public flavor never gets these resources.
+MAIN_APP_DISPLAY_NAME = 'RustDesk Host (ranode)'
+
+
+def brand_macos_main_app(app_path):
+    resources = os.path.join(app_path, 'Contents', 'Resources')
+    shutil.copyfile(os.path.join('macos', 'Runner', 'AppIconHost.icns'),
+                    os.path.join(resources, 'AppIcon.icns'))
+    info_path = os.path.join(app_path, 'Contents', 'Info.plist')
+    with open(info_path, 'rb') as f:
+        info = plistlib.load(f)
+    info['CFBundleDisplayName'] = 'RustDesk'
+    info['LSHasLocalizedDisplayName'] = True
+    with open(info_path, 'wb') as f:
+        plistlib.dump(info, f)
+    lproj = os.path.join(resources, 'en.lproj')
+    os.makedirs(lproj, exist_ok=True)
+    with open(os.path.join(lproj, 'InfoPlist.strings'), 'w', encoding='utf-8') as f:
+        f.write(f'"CFBundleDisplayName" = "{MAIN_APP_DISPLAY_NAME}";\n')
+
+
 def write_macos_flavor_xcconfig():
     if RUSTDESK_FLAVOR == 'public':
         with open(MACOS_FLAVOR_XCCONFIG, 'w', encoding='utf-8') as f:
@@ -1001,6 +1028,8 @@ def build_flutter_dmg(version, features):
     # like the main app. The bundle is re-signed afterwards (res/osx-sign-notarize.sh).
     if RUSTDESK_FLAVOR == 'public':
         system2(f'cp -f macos/Runner/AppIconPublic.icns ./build/macos/Build/Products/Release/{macos_app_bundle()}/Contents/Resources/AppIcon.icns')
+    else:
+        brand_macos_main_app(f'./build/macos/Build/Products/Release/{macos_app_bundle()}')
     '''
     system2(
         "create-dmg --volname \"RustDesk Installer\" --window-pos 200 120 --window-size 800 400 --icon-size 100 --app-drop-link 600 185 --icon RustDesk.app 200 190 --hide-extension RustDesk.app rustdesk.dmg ./build/macos/Build/Products/Release/RustDesk.app")
