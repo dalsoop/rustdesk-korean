@@ -877,5 +877,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Other kinds", "기타"),
         ("Copy", "복사"),
         ("Welcome to {}", "{} 시작하기"),
+        ("public_welcome_internet_tip", "상대가 알려 준 RustDesk ID와 비밀번호로 인터넷을 통해 그 기기에 접속합니다. 먼저 RustDesk 계정으로 로그인하세요. 이 Mac에 Tailscale을 설치하면 팀 기기 목록도 여기에 나타납니다."),
+        ("public_no_tailscale_hint", "이 Mac에 Tailscale을 설치하면 팀 기기 목록이 여기에 나타납니다."),
     ].iter().cloned().collect();
 }

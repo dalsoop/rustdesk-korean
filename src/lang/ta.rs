@@ -877,5 +877,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Other kinds", ""),
         ("Copy", ""),
         ("Welcome to {}", ""),
+        ("public_welcome_internet_tip", ""),
+        ("public_no_tailscale_hint", ""),
     ].iter().cloned().collect();
 }

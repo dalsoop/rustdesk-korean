@@ -298,5 +298,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_internet_login_tip", "To connect over the internet, sign in with a RustDesk account, then enter the ID the other person gives you."),
         ("public_config_input", "To control the remote device with the keyboard, turn on \"RustDesk (forked ranode)\" in System Settings → Privacy & Security → Input Monitoring."),
         ("public_ts_not_responding_tip", "Tailscale is installed but did not answer. Open the Tailscale app, wait a moment and check again."),
+        ("public_welcome_internet_tip", "Connect to another person's device over the internet with the RustDesk ID and password they give you; sign in with a RustDesk account first. Once Tailscale is installed on this Mac, a list of team devices appears here too."),
+        ("public_no_tailscale_hint", "Install Tailscale on this Mac to see your team's devices here."),
     ].iter().cloned().collect();
 }

@@ -25,8 +25,15 @@ bool get publicStartsOnInternet =>
     bind.getLocalFlutterOption(k: kOptionPublicStartTab) == _kStartTabInternet;
 
 /// Asks how the user will connect; [onChoose] gets true for the internet tab.
-/// Closing it without a choice keeps the start tab as it was.
-void showPublicWelcome(void Function(bool internet) onChoose) {
+/// Closing it without a choice keeps the start tab as it was. Without
+/// Tailscale on this Mac ([teamDevices] false) there is nothing to choose: the
+/// guide explains the internet connection alone.
+void showPublicWelcome(void Function(bool internet) onChoose,
+    {bool teamDevices = true}) {
+  if (!teamDevices) {
+    _showInternetOnlyWelcome();
+    return;
+  }
   gFFI.dialogManager.show((setState, close, context) {
     void finish(bool? internet) {
       bind.setLocalFlutterOption(k: kOptionPublicWelcomeDone, v: 'Y');
@@ -61,6 +68,33 @@ void showPublicWelcome(void Function(bool internet) onChoose) {
         dialogButton('Later', onPressed: () => finish(null), isOutline: true),
       ],
       onCancel: () => finish(null),
+    );
+  });
+}
+
+void _showInternetOnlyWelcome() {
+  gFFI.dialogManager.show((setState, close, context) {
+    void finish() {
+      bind.setLocalFlutterOption(k: kOptionPublicWelcomeDone, v: 'Y');
+      close();
+    }
+
+    final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
+    return CustomAlertDialog(
+      title: Text(translate('Welcome to {$kPublicAppDisplayName}')),
+      contentBoxConstraints: const BoxConstraints(maxWidth: 460),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(translate('public_welcome_internet_tip')),
+          const SizedBox(height: 14),
+          Text(translate('public_incoming_tip'), style: hint),
+        ],
+      ),
+      actions: [dialogButton('Start', onPressed: finish)],
+      onSubmit: finish,
+      onCancel: finish,
     );
   });
 }
