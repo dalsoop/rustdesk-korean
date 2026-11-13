@@ -12,8 +12,8 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/connection_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
-import 'package:flutter_hbb/desktop/pages/public_home.dart';
-import 'package:flutter_hbb/desktop/pages/public_onboarding.dart';
+import 'package:flutter_hbb/desktop/pages/connect_home.dart';
+import 'package:flutter_hbb/desktop/pages/connect_onboarding.dart';
 import 'package:flutter_hbb/desktop/widgets/update_progress.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
@@ -78,7 +78,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   Widget buildLeftPane(BuildContext context) {
-    if (bind.mainIsPublicFlavor()) return buildPublicLeftPane(context);
+    if (bind.mainIsConnectFlavor()) return buildConnectLeftPane(context);
     final isIncomingOnly = bind.isIncomingOnly();
     final isOutgoingOnly = bind.isOutgoingOnly();
     final children = <Widget>[
@@ -181,9 +181,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     );
   }
 
-  // Korean fork, Public flavor: it only makes outgoing connections, so the
+  // Korean fork, connect flavor: it only makes outgoing connections, so the
   // incoming ID and one-time password are left out.
-  Widget buildPublicLeftPane(BuildContext context) {
+  Widget buildConnectLeftPane(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: gFFI.serverModel,
       child: Container(
@@ -196,7 +196,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
               child: Column(
                 children: [
                   Align(alignment: Alignment.center, child: loadLogo()),
-                  const PublicIntroCard(),
+                  const ConnectIntroCard(),
                   Obx(() => buildHelpCards(stateGlobal.updateUrl.value)),
                 ],
               ),
@@ -211,7 +211,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   buildRightPane(BuildContext context) {
     return Container(
       color: Theme.of(context).scaffoldBackgroundColor,
-      child: bind.mainIsPublicFlavor() ? PublicHomePage() : ConnectionPage(),
+      child: bind.mainIsConnectFlavor() ? ConnectHomePage() : ConnectionPage(),
     );
   }
 
@@ -505,7 +505,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         });
       }
     } else if (isMacOS) {
-      final isOutgoingOnly = bind.isOutgoingOnly() || bind.mainIsPublicFlavor();
+      final isOutgoingOnly = bind.isOutgoingOnly() || bind.mainIsConnectFlavor();
       if (!(isOutgoingOnly || bind.mainIsCanScreenRecording(prompt: false))) {
         return buildInstallCard("Permissions", "config_screen", "Configure",
             () async {
@@ -521,7 +521,9 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       } else if (!bind.mainIsCanInputMonitoring(prompt: false)) {
         return buildInstallCard(
             "Permissions",
-            bind.mainIsPublicFlavor() ? "public_config_input" : "config_input",
+            bind.mainIsConnectFlavor()
+                ? "connect_config_input_{$kConnectAppDisplayName}"
+                : "config_input",
             "Configure",
             () async {
           bind.mainIsCanInputMonitoring(prompt: true);

@@ -1,4 +1,4 @@
-import 'package:flutter_hbb/common/public_onprem.dart';
+import 'package:flutter_hbb/common/connect_onprem.dart';
 import 'package:flutter_hbb/common/tailscale.dart';
 import 'package:flutter_hbb/common/tailscale_range.dart';
 import 'package:flutter_test/flutter_test.dart';

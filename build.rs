@@ -102,7 +102,7 @@ fn emit_ko_release() {
     println!("cargo:rerun-if-changed=src/fork_update.rs");
 }
 
-// Korean fork: `RUSTDESK_FLAVOR=public` builds the "RustDesk Public" app, see src/public_flavor.rs.
+// Korean fork: `RUSTDESK_FLAVOR=connect` builds the "RustDesk (for korean) 접속" app, see src/connect_flavor.rs.
 fn emit_flavor() {
     let flavor = std::env::var("RUSTDESK_FLAVOR").unwrap_or_default();
     println!("cargo:rustc-env=RUSTDESK_BUILD_FLAVOR={}", flavor);

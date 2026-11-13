@@ -1115,7 +1115,7 @@ pub fn get_app_name() -> String {
 #[inline]
 pub fn is_rustdesk() -> bool {
     hbb_common::config::APP_NAME.read().unwrap().eq("RustDesk")
-        || crate::public_flavor::is_public()
+        || crate::connect_flavor::is_connect()
 }
 
 #[inline]
@@ -2588,7 +2588,7 @@ pub fn get_builtin_option(key: &str) -> String {
 
 #[inline]
 pub fn is_custom_client() -> bool {
-    get_app_name() != "RustDesk" && !crate::public_flavor::is_public()
+    get_app_name() != "RustDesk" && !crate::connect_flavor::is_connect()
 }
 
 pub fn verify_login(_raw: &str, _id: &str) -> bool {

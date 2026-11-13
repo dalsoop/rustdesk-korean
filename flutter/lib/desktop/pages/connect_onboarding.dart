@@ -1,4 +1,4 @@
-// Korean fork, RustDesk Public flavor: what a new user needs on the home
+// Korean fork, connect flavor ("RustDesk (for korean) 접속"): what a new user needs on the home
 // screen. A first-run guide that picks the start tab, the left-pane note that
 // this app only makes outgoing connections, a next step for every Tailscale
 // state, the reason a device card cannot be used, and the internet sign-in.
@@ -12,23 +12,23 @@ import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const String kOptionPublicWelcomeDone = 'public-welcome-done';
-const String kOptionPublicStartTab = 'public-start-tab';
+const String kOptionConnectWelcomeDone = 'connect-welcome-done';
+const String kOptionConnectStartTab = 'connect-start-tab';
 const String _kStartTabInternet = 'internet';
 const String _kStartTabOnPrem = 'onprem';
 const String _kTailscaleDownloadUrl = 'https://tailscale.com/download/mac';
 
-bool get publicWelcomeDone =>
-    bind.getLocalFlutterOption(k: kOptionPublicWelcomeDone) == 'Y';
+bool get connectWelcomeDone =>
+    bind.getLocalFlutterOption(k: kOptionConnectWelcomeDone) == 'Y';
 
-bool get publicStartsOnInternet =>
-    bind.getLocalFlutterOption(k: kOptionPublicStartTab) == _kStartTabInternet;
+bool get connectStartsOnInternet =>
+    bind.getLocalFlutterOption(k: kOptionConnectStartTab) == _kStartTabInternet;
 
 /// Asks how the user will connect; [onChoose] gets true for the internet tab.
 /// Closing it without a choice keeps the start tab as it was. Without
 /// Tailscale on this Mac ([teamDevices] false) there is nothing to choose: the
 /// guide explains the internet connection alone.
-void showPublicWelcome(void Function(bool internet) onChoose,
+void showConnectWelcome(void Function(bool internet) onChoose,
     {bool teamDevices = true}) {
   if (!teamDevices) {
     _showInternetOnlyWelcome();
@@ -36,32 +36,32 @@ void showPublicWelcome(void Function(bool internet) onChoose,
   }
   gFFI.dialogManager.show((setState, close, context) {
     void finish(bool? internet) {
-      bind.setLocalFlutterOption(k: kOptionPublicWelcomeDone, v: 'Y');
+      bind.setLocalFlutterOption(k: kOptionConnectWelcomeDone, v: 'Y');
       close();
       if (internet == null) return;
       bind.setLocalFlutterOption(
-          k: kOptionPublicStartTab,
+          k: kOptionConnectStartTab,
           v: internet ? _kStartTabInternet : _kStartTabOnPrem);
       onChoose(internet);
     }
 
     final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
     return CustomAlertDialog(
-      title: Text(translate('Welcome to {$kPublicAppDisplayName}')),
+      title: Text(translate('Welcome to {$kConnectAppDisplayName}')),
       contentBoxConstraints: const BoxConstraints(maxWidth: 460),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(translate('public_welcome_tip')),
+          Text(translate('connect_welcome_tip')),
           const SizedBox(height: 14),
           _choiceCard(context, Icons.lan_outlined, 'Connect to team devices',
-              'public_onprem_choice_tip', () => finish(false)),
+              'connect_onprem_choice_tip', () => finish(false)),
           const SizedBox(height: 10),
           _choiceCard(context, Icons.public, 'Connect over the internet',
-              'public_internet_choice_tip', () => finish(true)),
+              'connect_internet_choice_tip', () => finish(true)),
           const SizedBox(height: 14),
-          Text(translate('public_incoming_tip'), style: hint),
+          Text(translate('connect_incoming_tip'), style: hint),
         ],
       ),
       actions: [
@@ -75,21 +75,21 @@ void showPublicWelcome(void Function(bool internet) onChoose,
 void _showInternetOnlyWelcome() {
   gFFI.dialogManager.show((setState, close, context) {
     void finish() {
-      bind.setLocalFlutterOption(k: kOptionPublicWelcomeDone, v: 'Y');
+      bind.setLocalFlutterOption(k: kOptionConnectWelcomeDone, v: 'Y');
       close();
     }
 
     final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
     return CustomAlertDialog(
-      title: Text(translate('Welcome to {$kPublicAppDisplayName}')),
+      title: Text(translate('Welcome to {$kConnectAppDisplayName}')),
       contentBoxConstraints: const BoxConstraints(maxWidth: 460),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(translate('public_welcome_internet_tip')),
+          Text(translate('connect_welcome_internet_tip')),
           const SizedBox(height: 14),
-          Text(translate('public_incoming_tip'), style: hint),
+          Text(translate('connect_incoming_tip'), style: hint),
         ],
       ),
       actions: [dialogButton('Start', onPressed: finish)],
@@ -134,10 +134,10 @@ Widget _choiceCard(BuildContext context, IconData icon, String title,
   );
 }
 
-/// "RustDesk (forked ranode) 1.5.0 (ko.N)" in the tab bar, so this window is never taken for the main
+/// "RustDesk (for korean) 접속 1.5.0 (ko.N)" in the tab bar, so this window is never taken for the main
 /// RustDesk app. The fork build number is upstream build * 100 + N (pubspec.yaml).
-class PublicAppLabel extends StatelessWidget {
-  const PublicAppLabel({Key? key}) : super(key: key);
+class ConnectAppLabel extends StatelessWidget {
+  const ConnectAppLabel({Key? key}) : super(key: key);
 
   static final Future<String> _versionOnce = _version();
 
@@ -157,7 +157,7 @@ class PublicAppLabel extends StatelessWidget {
         children: [
           const Icon(Icons.public, size: 14, color: Color(0xFFFF8500)),
           const SizedBox(width: 4),
-          const Text(kPublicAppDisplayName,
+          const Text(kConnectAppDisplayName,
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           if (snapshot.hasData) const SizedBox(width: 6),
           if (snapshot.hasData)
@@ -169,8 +169,8 @@ class PublicAppLabel extends StatelessWidget {
 }
 
 /// Left pane text in place of the incoming ID and password board.
-class PublicIntroCard extends StatelessWidget {
-  const PublicIntroCard({Key? key}) : super(key: key);
+class ConnectIntroCard extends StatelessWidget {
+  const ConnectIntroCard({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +182,7 @@ class PublicIntroCard extends StatelessWidget {
           Text(translate('Outgoing connections only'),
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 10),
-          Text(translate('public_incoming_tip'),
+          Text(translate('connect_incoming_tip'),
               style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
@@ -192,13 +192,13 @@ class PublicIntroCard extends StatelessWidget {
 
 /// The next step for an on-prem tab that has no device to show. [state] is
 /// [TailscaleState.running] when the tailnet simply has no other device.
-class PublicTailscaleGuide extends StatelessWidget {
+class ConnectTailscaleGuide extends StatelessWidget {
   final TailscaleState state;
   // Null while a read is already running.
   final VoidCallback? onCheckAgain;
   final VoidCallback onUseInternet;
 
-  const PublicTailscaleGuide({
+  const ConnectTailscaleGuide({
     Key? key,
     required this.state,
     required this.onCheckAgain,
@@ -214,32 +214,32 @@ class PublicTailscaleGuide extends StatelessWidget {
       TailscaleState.notFound when installed => (
           Icons.sync_problem,
           'Tailscale is not responding',
-          'public_ts_not_responding_tip'
+          'connect_ts_not_responding_tip'
         ),
       TailscaleState.notFound => (
           Icons.download_outlined,
           'Tailscale is not installed',
-          'public_ts_install_tip'
+          'connect_ts_install_tip'
         ),
       TailscaleState.stopped => (
           Icons.power_settings_new,
           'Tailscale is turned off',
-          'public_ts_off_tip'
+          'connect_ts_off_tip'
         ),
       TailscaleState.needsLogin => (
           Icons.login,
           'Sign in to Tailscale',
-          'public_ts_login_tip'
+          'connect_ts_login_tip'
         ),
       TailscaleState.needsApproval => (
           Icons.hourglass_empty,
           'Waiting for administrator approval',
-          'public_ts_approval_tip'
+          'connect_ts_approval_tip'
         ),
       TailscaleState.running => (
           Icons.devices_other,
           'No other devices in this network',
-          'public_ts_empty_tip'
+          'connect_ts_empty_tip'
         ),
     };
     final canOpenApp = state == TailscaleState.stopped ||
@@ -303,14 +303,14 @@ class PublicTailscaleGuide extends StatelessWidget {
   }
 }
 
-enum PublicPeerProblem { directOff, missing, offline }
+enum ConnectPeerProblem { directOff, missing, offline }
 
 /// Says why [deviceName] cannot take a connection and what to do about it.
-void showPublicPeerHelp(String deviceName, PublicPeerProblem problem) {
+void showConnectPeerHelp(String deviceName, ConnectPeerProblem problem) {
   final tip = switch (problem) {
-    PublicPeerProblem.directOff => 'public_direct_off_help',
-    PublicPeerProblem.missing => 'public_missing_help',
-    PublicPeerProblem.offline => 'public_offline_help',
+    ConnectPeerProblem.directOff => 'connect_direct_off_help',
+    ConnectPeerProblem.missing => 'connect_missing_help',
+    ConnectPeerProblem.offline => 'connect_offline_help',
   };
   gFFI.dialogManager.show((setState, close, context) {
     return CustomAlertDialog(
@@ -325,8 +325,8 @@ void showPublicPeerHelp(String deviceName, PublicPeerProblem problem) {
 
 /// Shown above the internet tab while no account is signed in: the public
 /// server needs the controlling side to sign in.
-class PublicInternetLoginBanner extends StatelessWidget {
-  const PublicInternetLoginBanner({Key? key}) : super(key: key);
+class ConnectInternetLoginBanner extends StatelessWidget {
+  const ConnectInternetLoginBanner({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -346,7 +346,7 @@ class PublicInternetLoginBanner extends StatelessWidget {
             const Icon(Icons.info_outline, color: MyTheme.accent),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(translate('public_internet_login_tip'),
+              child: Text(translate('connect_internet_login_tip'),
                   style: const TextStyle(fontSize: 13)),
             ),
             const SizedBox(width: 8),

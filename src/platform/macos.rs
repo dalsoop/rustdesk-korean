@@ -200,7 +200,7 @@ pub fn is_installed_daemon(prompt: bool) -> bool {
         }
         return true;
     }
-    if crate::public_flavor::is_public() {
+    if crate::connect_flavor::is_connect() {
         return false;
     }
 
@@ -338,8 +338,8 @@ fn write_plist_atomically(path: &str, body: &str) -> ResultType<()> {
 }
 
 pub fn write_plists() -> ResultType<()> {
-    if crate::public_flavor::is_public() {
-        bail!("the Public flavor does not install a LaunchAgent or LaunchDaemon");
+    if crate::connect_flavor::is_connect() {
+        bail!("the connect flavor does not install a LaunchAgent or LaunchDaemon");
     }
     let daemon_plist_path = format!(
         "/Library/LaunchDaemons/com.carriez.{}_service.plist",

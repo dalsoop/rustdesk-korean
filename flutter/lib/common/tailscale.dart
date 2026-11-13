@@ -72,7 +72,7 @@ class RustDeskPeerInfo {
       {required this.id, required this.hostname, required this.platform});
 }
 
-/// Parses the JSON from `mainPublicProbeRustdesk`; empty or bad text means
+/// Parses the JSON from `mainConnectProbeRustdesk`; empty or bad text means
 /// nothing answered.
 RustDeskPeerInfo? parseRustDeskProbe(String output) {
   if (output.isEmpty) return null;
