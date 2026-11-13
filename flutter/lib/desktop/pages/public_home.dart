@@ -41,6 +41,10 @@ class _PublicHomePageState extends State<PublicHomePage> {
   // Opens on the tab chosen in the welcome guide (온프레미스 when none was
   // chosen); later tab clicks are deliberately not remembered.
   int _tab = publicStartsOnInternet ? _internetTab : _onPremTab;
+  // Without Tailscale on this Mac the on-prem tab is hidden and the home is the
+  // internet tab alone; it appears by itself once Tailscale is installed.
+  bool _tsInstalled = Tailscale.findBinary() != null;
+  int get _shownTab => _tsInstalled ? _tab : _internetTab;
   TailscaleSnapshot? _snapshot;
   bool _loading = false;
   bool _switching = false;
@@ -68,6 +72,13 @@ class _PublicHomePageState extends State<PublicHomePage> {
     _search.addListener(() => setState(() {}));
     _refresh();
     _setupPoll = Timer.periodic(_kSetupPollInterval, (_) {
+      if (!_tsInstalled) {
+        if (Tailscale.findBinary() != null) {
+          setState(() => _tsInstalled = true);
+          _refresh();
+        }
+        return;
+      }
       final state = _snapshot?.state;
       if (_tab == _onPremTab &&
           !_loading &&
@@ -78,8 +89,9 @@ class _PublicHomePageState extends State<PublicHomePage> {
       }
     });
     if (!publicWelcomeDone) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => showPublicWelcome(_onWelcomeChoice));
+      WidgetsBinding.instance.addPostFrameCallback((_) => showPublicWelcome(
+          _onWelcomeChoice,
+          teamDevices: _tsInstalled));
     }
   }
 
@@ -109,6 +121,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
     setState(() {
       _snapshot = snapshot;
       _loading = false;
+      _tsInstalled = Tailscale.findBinary() != null;
       if (!ids.contains(_selectedProfileId)) {
         _selectedProfileId = snapshot.activeProfile?.id ??
             (snapshot.profiles.isEmpty ? null : snapshot.profiles.first.id);
@@ -173,7 +186,7 @@ class _PublicHomePageState extends State<PublicHomePage> {
         const Divider(height: 1),
         Expanded(
           child: IndexedStack(
-            index: _tab,
+            index: _shownTab,
             children: [
               _buildOnPrem(context),
               Column(
@@ -187,13 +200,13 @@ class _PublicHomePageState extends State<PublicHomePage> {
         ),
         const Divider(height: 1),
         Offstage(
-          offstage: _tab != _onPremTab,
+          offstage: _shownTab != _onPremTab,
           child: _buildOnPremStatus(),
         ),
         // Kept mounted on both tabs: it also polls the service state for
         // the rest of the app.
         Offstage(
-          offstage: _tab != _internetTab,
+          offstage: _shownTab != _internetTab,
           child: Row(
             children: [
               Expanded(child: OnlineStatusWidget()),
@@ -242,14 +255,22 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
     return Row(
       children: [
-        tab(_onPremTab, 'On-premises'),
-        tab(_internetTab, 'Internet'),
+        if (_tsInstalled) tab(_onPremTab, 'On-premises'),
+        if (_tsInstalled) tab(_internetTab, 'Internet'),
+        if (!_tsInstalled)
+          Flexible(
+            child: Text(translate('public_no_tailscale_hint'),
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 12, color: Theme.of(context).hintColor)),
+          ).marginOnly(left: 6, top: 12, bottom: 12),
         const Spacer(),
         const PublicAppLabel(),
         IconButton(
           tooltip: translate('Show the welcome guide'),
           icon: const Icon(Icons.help_outline, size: 20),
-          onPressed: () => showPublicWelcome(_onWelcomeChoice),
+          onPressed: () =>
+              showPublicWelcome(_onWelcomeChoice, teamDevices: _tsInstalled),
         ),
       ],
     ).marginOnly(left: 12, right: 8, top: 8);
