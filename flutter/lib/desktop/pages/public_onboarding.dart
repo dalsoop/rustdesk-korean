@@ -105,6 +105,8 @@ Widget _choiceCard(BuildContext context, IconData icon, String title,
 class PublicAppLabel extends StatelessWidget {
   const PublicAppLabel({Key? key}) : super(key: key);
 
+  static final Future<String> _versionOnce = _version();
+
   static Future<String> _version() async {
     final version = await bind.mainGetVersion();
     final build = int.tryParse((await PackageInfo.fromPlatform()).buildNumber);
@@ -115,7 +117,7 @@ class PublicAppLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final hint = Theme.of(context).hintColor;
     return FutureBuilder<String>(
-      future: _version(),
+      future: _versionOnce,
       builder: (context, snapshot) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
