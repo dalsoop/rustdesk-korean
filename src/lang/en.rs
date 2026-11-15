@@ -295,10 +295,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("for_korean_direct_off_help", "RustDesk is running on this device, but direct IP access is off. On that device, open RustDesk Settings → Security and turn on \"Enable direct IP access\"."),
         ("for_korean_missing_help", "No RustDesk answered on this device. Install RustDesk there, then turn on \"Enable direct IP access\" in Settings → Security. If RustDesk is already installed, it may be closed or its LAN discovery may be off."),
         ("for_korean_offline_help", "This device is offline or not connected to Tailscale. Turn it on and connect it to Tailscale, then try again."),
-        ("for_korean_internet_login_tip", "To connect over the internet, sign in with a RustDesk account, then enter the ID the other person gives you."),
+        ("for_korean_internet_login_tip", "Connecting over the internet needs a sign-in. It is free: sign in with Google or another account, then enter the ID the other person gives you."),
         ("for_korean_config_input_{}", "To control the remote device with the keyboard, turn on \"{}\" in System Settings → Privacy & Security → Input Monitoring."),
         ("for_korean_ts_not_responding_tip", "Tailscale is installed but did not answer. Open the Tailscale app, wait a moment and check again."),
         ("for_korean_welcome_internet_tip", "Connect to another person's device over the internet with the RustDesk ID and password they give you; sign in with a RustDesk account first. Once Tailscale is installed on this Mac, a list of team devices appears here too."),
         ("for_korean_no_tailscale_hint", "Install Tailscale on this Mac to see your team's devices here."),
+        ("for_korean_server_login_tip", "The public server needs a free sign-in · sign in with Google or another account below"),
+        ("for_korean_login_required_tip", "RustDesk's public server only connects after you sign in. Signing in is free with a Google or other account: click \"Login\", then connect again."),
     ].iter().cloned().collect();
 }

@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/tailscale.dart';
 import 'package:flutter_hbb/common/widgets/login.dart';
+import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
+import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -321,6 +323,45 @@ void showForKoreanPeerHelp(String deviceName, ForKoreanPeerProblem problem) {
       onCancel: close,
     );
   });
+}
+
+/// The public server refused a connection because nobody is signed in. Says so
+/// in the user's language and offers the same sign-in dialog as the home
+/// screen; after a sign-in the main window refreshes its account and
+/// [onSignedIn] tries the connection again. Otherwise the connection closes,
+/// as after any connection error.
+void showForKoreanLoginRequiredBox(
+    OverlayDialogManager dialogManager, String title, VoidCallback onSignedIn) {
+  dialogManager.dismissAll();
+  void closeSession() {
+    dialogManager.dismissAll();
+    closeConnection();
+  }
+
+  Future<void> signIn() async {
+    dialogManager.dismissAll();
+    if (await loginDialog() == true) {
+      rustDeskWinManager.call(WindowType.Main, kWindowRefreshCurrentUser, '');
+      onSignedIn();
+    } else {
+      closeConnection();
+    }
+  }
+
+  dialogManager.show(
+    (setState, close, context) => CustomAlertDialog(
+      title: null,
+      content: SelectionArea(
+          child: msgboxContent('error', title, 'for_korean_login_required_tip')),
+      actions: [
+        dialogButton('Close', onPressed: closeSession, isOutline: true),
+        dialogButton('Login', onPressed: signIn),
+      ],
+      onSubmit: signIn,
+      onCancel: closeSession,
+    ),
+    tag: 'for-korean-login-required',
+  );
 }
 
 /// Shown above the internet tab while no account is signed in: the public
