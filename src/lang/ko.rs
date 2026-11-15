@@ -864,7 +864,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_direct_off_help", "이 기기에서 RustDesk가 실행 중이지만 직접 IP 액세스가 꺼져 있습니다. 그 기기의 RustDesk에서 설정 → 보안 → \"직접 IP 액세스 허용\"을 켜세요."),
         ("public_missing_help", "이 기기에서 응답한 RustDesk가 없습니다. 그 기기에 RustDesk를 설치한 뒤 설정 → 보안 → \"직접 IP 액세스 허용\"을 켜세요. 이미 설치되어 있다면 RustDesk가 꺼져 있거나 LAN 검색이 꺼져 있을 수 있습니다."),
         ("public_offline_help", "이 기기가 꺼져 있거나 Tailscale에 연결되어 있지 않습니다. 기기를 켜고 Tailscale에 연결한 뒤 다시 시도하세요."),
-        ("public_internet_login_tip", "인터넷으로 접속하려면 RustDesk 계정으로 로그인한 뒤, 상대가 알려 준 ID를 입력하세요."),
+        ("public_internet_login_tip", "인터넷으로 접속하려면 로그인이 필요합니다. 로그인은 무료이며 Google 등의 계정으로 할 수 있습니다. 로그인한 뒤 상대가 알려 준 ID를 입력하세요."),
         ("public_config_input", "키보드로 원격 기기를 제어하려면 시스템 설정 → 개인정보 보호 및 보안 → 입력 모니터링에서 \"RustDesk (forked ranode)\"를 켜세요."),
         ("Tailscale is not responding", "Tailscale이 응답하지 않습니다"),
         ("public_ts_not_responding_tip", "Tailscale이 설치되어 있지만 응답하지 않았습니다. Tailscale 앱을 열고 잠시 뒤에 다시 확인하세요."),
@@ -879,5 +879,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Welcome to {}", "{} 시작하기"),
         ("public_welcome_internet_tip", "상대가 알려 준 RustDesk ID와 비밀번호로 인터넷을 통해 그 기기에 접속합니다. 먼저 RustDesk 계정으로 로그인하세요. 이 Mac에 Tailscale을 설치하면 팀 기기 목록도 여기에 나타납니다."),
         ("public_no_tailscale_hint", "이 Mac에 Tailscale을 설치하면 팀 기기 목록이 여기에 나타납니다."),
+        ("public_server_login_tip", "공용 서버는 무료 로그인이 필요합니다 · Google 등으로 로그인하세요"),
+        ("public_login_required_tip", "RustDesk 공용 서버는 로그인해야 접속할 수 있습니다. 로그인은 무료이며 Google 등의 계정으로 할 수 있습니다. \"로그인\"을 누르면 로그인 뒤 다시 접속합니다."),
     ].iter().cloned().collect();
 }

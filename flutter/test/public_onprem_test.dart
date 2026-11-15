@@ -1,3 +1,4 @@
+import 'package:flutter_hbb/common/public_login.dart';
 import 'package:flutter_hbb/common/public_onprem.dart';
 import 'package:flutter_hbb/common/tailscale.dart';
 import 'package:flutter_hbb/common/tailscale_range.dart';
@@ -92,5 +93,22 @@ void main() {
     expect(back.get(_home.tailnet, 'mac'),
         const OnPremRustDeskMemo(state: OnPremRustDesk.reachable, id: '42'));
     expect(back.get(_work.tailnet, 'mac'), isNull);
+  });
+
+  test('the public server offers third-party sign-in and asks for it', () {
+    expect(isRustDeskPublicApiServer('https://admin.rustdesk.com'), isTrue);
+    expect(isRustDeskPublicApiServer('admin.rustdesk.com.'), isTrue);
+    expect(isRustDeskPublicApiServer('http://rustdesk.ranode.internal.kr:21114'),
+        isFalse);
+    expect(isRustDeskPublicApiServer('https://rustdesk.com.example.org'), isFalse);
+    expect(isRustDeskPublicApiServer(''), isFalse);
+
+    expect(
+        isPublicLoginRequiredError(
+            'Please log in before connecting to this device'),
+        isTrue);
+    expect(isPublicLoginRequiredError('Login required for public server'),
+        isTrue);
+    expect(isPublicLoginRequiredError('Remote desktop is offline'), isFalse);
   });
 }

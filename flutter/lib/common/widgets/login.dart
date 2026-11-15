@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/hbbs/hbbs.dart';
+import 'package:flutter_hbb/common/public_login.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/user_model.dart';
 import 'package:get/get.dart';
@@ -752,6 +753,11 @@ Future<bool?> _openLoginDialog() async {
 
   Future.delayed(Duration.zero, fetchLoginOptions);
 
+  // Korean fork, Public flavor: RustDesk's public server refuses account
+  // passwords, so only its third-party sign-ins are offered there.
+  final thirdPartyOnly = bind.mainIsPublicFlavor() &&
+      isRustDeskPublicApiServer(await bind.mainGetApiServer());
+
   final res = await gFFI.dialogManager.show<bool>((setState, close, context) {
     username.addListener(() {
       if (usernameMsg != null) {
@@ -824,6 +830,7 @@ Future<bool?> _openLoginDialog() async {
     }
 
     onLogin() async {
+      if (thirdPartyOnly) return;
       if (curOP.value.isNotEmpty || isInProgress) {
         return;
       }
@@ -894,6 +901,7 @@ Future<bool?> _openLoginDialog() async {
                 const SizedBox(
                   height: 8.0,
                 ),
+                if (!thirdPartyOnly)
                 Center(
                     child: Text(
                   translate('or'),
@@ -975,6 +983,12 @@ Future<bool?> _openLoginDialog() async {
           const SizedBox(
             height: 8.0,
           ),
+          if (thirdPartyOnly)
+            Text(
+              translate('public_server_login_tip'),
+              textAlign: TextAlign.center,
+            ),
+          if (!thirdPartyOnly)
           LoginWidgetUserPass(
             username: username,
             pass: password,
