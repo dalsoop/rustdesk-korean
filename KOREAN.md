@@ -171,7 +171,7 @@ macOS 는 입력 소스 단축키(예: ⌃Space, 또는 Caps Lock 을 F18 로 �
 | 들어오는 접속 | 받음(우리 Mac 은 Tailscale 대역만 허용) | Tailscale 대역(100.64.0.0/10) 밖은 받지 않음, 직접 접속 포트 닫음. 빌드가 강제 |
 | 서비스·권한 요청 | 있음 | 없음 |
 
-New identity from ko.21 (the owner's decision of 2026-11-13): the second app is the `for-korean` flavor, shown as "RustDesk (for korean) 접속", with the identifiers in the table above; the word "public" is no longer part of its name, bundle id, app name, URL scheme, release file name or code. History: until ko.19 this app was the `public` flavor, bundle id `net.ranode.rustdesk-public`, app name `RustDeskPublic`, URL scheme `rustdeskpublic`, shown as "RustDesk (forked ranode)" (ko.17 to ko.19; "RustDesk Public" until ko.16), released as `rustdesk-public-1.5.0-ko.N-macos-aarch64.zip`. The identifiers were briefly named `connect` in #28, never released.
+New identity from ko.21 (the owner's decision of 2026-11-13): the second app is the `for-korean` flavor, shown as "RustDesk (for korean) 접속", with the identifiers in the table above; the word "public" is no longer part of its name, bundle id, app name, URL scheme, release file name or code. History: until ko.20 this app was the `public` flavor, bundle id `net.ranode.rustdesk-public`, app name `RustDeskPublic`, URL scheme `rustdeskpublic`, shown as "RustDesk (forked ranode)" (ko.17 to ko.20; "RustDesk Public" until ko.16), released as `rustdesk-public-1.5.0-ko.N-macos-aarch64.zip`. The identifiers were briefly named `connect` in #28, never released.
 
 What users notice in ko.21: because the bundle id and the app name changed, macOS treats it as a new app. Its settings start fresh (new config folder `RustDeskForKorean`; the welcome guide shows again and on-prem recents, favorites and remembered checks start empty), macOS permissions (Input Monitoring and the others) have to be granted again to "RustDesk (for korean) 접속", and the internet tab asks for the RustDesk account sign-in again. Links with the old `rustdeskpublic://` scheme no longer open it. The old app and its settings stay until they are removed; the new app does not read them.
 
@@ -218,11 +218,11 @@ RustDesk 프로토콜 버전(`Cargo.toml` 의 `1.5.0`)은 원본과 같게 둡�
 1. `version:` 줄의 끝 두 자리를 올리는 PR 을 기본 브랜치에 병합합니다.
 2. 맥: m5m2 에서 빌드하고, m5m1 에서 Developer ID(V2Z46YY386)로 서명·공증합니다(번들 ID `com.carriez.rustdesk` 그대로). 같은 커밋으로 `RUSTDESK_FLAVOR=for-korean` 빌드도 만들어 RustDesk (for korean) 접속 도 함께 냅니다. 서명·공증·zip 은 `res/osx-sign-notarize.sh <빌드된 .app> <zip 안 이름> <zip>` 로 합니다.
    - 본 앱: `RustDesk.app` → `rustdesk-1.5.0-ko.N-macos-aarch64.zip`
-   - For-korean app: `RustDeskForKorean.app` → name inside the zip `RustDesk (for korean) 접속.app`, `rustdesk-for-korean-1.5.0-ko.N-macos-aarch64.zip` (until ko.19 see the history line above)
+   - For-korean app: `RustDeskForKorean.app` → name inside the zip `RustDesk (for korean) 접속.app`, `rustdesk-for-korean-1.5.0-ko.N-macos-aarch64.zip` (until ko.20 see the history line above)
 3. 윈도우·리눅스: GitHub Actions `Build desktop (Korean fork, Windows/Linux x64)` 가 기본 브랜치 push 에서 돕니다.
 4. 안드로이드: gitlab `gujoai/apps/upstream-mono` 에 `rustdesk/` subtree 를 새 머리로 맞추는 MR 을 내면 CI 가 서명 없는 APK(`apk/rustdesk-1.5.0-ko.N-<커밋>-aarch64-unsigned.apk`)를 만듭니다. CI 러너는 서명 키를 갖지 않습니다. 그 아티팩트를 m5m1 에 받아 `res/android-sign-release.sh <unsigned.apk> rustdesk-1.5.0-ko.N-aarch64.apk` 로 서명합니다. 키는 Bitwarden Secrets Manager `android-signing` 프로젝트에서 `bwsx` 로 이 스크립트에만 들어가고, 서명 인증서 SHA-256 이 기존 APK 와 같지 않으면 실패합니다(`43:7D:FD:91:…:AD:7D`). 결과 `.apk` 옆에 `.sha256` 을 씁니다. 도구는 m5m1 의 `~/work/sdk`(build-tools 34.0.0, JDK 17)입니다.
 5. GitHub 릴리스 `1.5.0-ko.N` 에 네 플랫폼 파일과 RustDesk (for korean) 접속 zip, 각 `.sha256` 을 올립니다.
-   - 우리 Mac 설치: dotfiles `scripts/adhoc/install-rustdesk-fork.sh <zip> <sha256>`(본 앱), and that script's second-app option for the for-korean app (dotfiles defines the option; until ko.19 it installed the old app identity).
+   - 우리 Mac 설치: dotfiles `scripts/adhoc/install-rustdesk-fork.sh <zip> <sha256>`(본 앱), and that script's second-app option for the for-korean app (dotfiles defines the option; until ko.20 it installed the old app identity).
 6. pop-os 는 host-infra 의 `versions.rustdesk`(`1.5.0+koN`), sha256, 주소를 바꾸는 MR 로 올립니다.
 
 ## 라이선스

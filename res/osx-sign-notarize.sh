@@ -4,7 +4,7 @@
 #
 #   res/osx-sign-notarize.sh <built .app> <bundle name in the zip> <output zip>
 #   e.g. res/osx-sign-notarize.sh flutter/build/macos/Build/Products/Release/RustDeskForKorean.app \
-#          "RustDesk (for korean) 접속.app" ~/work/rdk/release-ko20-assets/rustdesk-for-korean-1.5.0-ko.20-macos-aarch64.zip
+#          "RustDesk (for korean) 접속.app" ~/work/rdk/release-ko21-assets/rustdesk-for-korean-1.5.0-ko.21-macos-aarch64.zip
 #
 # Keys come from principal-secrets-mono (sops, decrypted only into a private temp folder under
 # ~/tmp that is removed on exit): secrets/macbook-tools/developer-id-application.enc.yaml
