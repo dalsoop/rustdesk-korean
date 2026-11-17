@@ -10,10 +10,10 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter_hbb/common/for_korean_login.dart';
+import 'package:flutter_hbb/common/public_login.dart';
 import 'package:flutter_hbb/common/widgets/peers_view.dart';
 import 'package:flutter_hbb/consts.dart';
-import 'package:flutter_hbb/desktop/pages/for_korean_onboarding.dart';
+import 'package:flutter_hbb/desktop/pages/public_onboarding.dart';
 import 'package:flutter_hbb/models/ab_model.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
 import 'package:flutter_hbb/models/cm_file_model.dart';
@@ -964,8 +964,8 @@ class FfiModel with ChangeNotifier {
           sessionId, type, title, text, link, hasRetry, dialogManager);
     } else if (text is String &&
         isPublicLoginRequiredError(text) &&
-        bind.mainIsForKoreanFlavor()) {
-      showForKoreanLoginRequiredBox(dialogManager, title,
+        bind.mainIsPublicFlavor()) {
+      showPublicLoginRequiredBox(dialogManager, title,
           () => reconnect(dialogManager, sessionId, false));
     } else {
       var hasRetry = evt['hasRetry'] == 'true';

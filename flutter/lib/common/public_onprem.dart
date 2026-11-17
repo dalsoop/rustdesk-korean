@@ -1,11 +1,11 @@
-// Korean fork, for-korean flavor ("RustDesk (for korean) 접속"): on-prem (Tailscale) recents and favorites.
+// Korean fork, RustDesk Public flavor: on-prem (Tailscale) recents and favorites.
 // Kept apart from RustDesk's own peer lists so they never mix with internet IDs.
 
 import 'dart:convert';
 
 import 'tailscale.dart';
 
-const String kOptionForKoreanOnPremRecords = 'for-korean-onprem-records';
+const String kOptionPublicOnPremRecords = 'public-onprem-records';
 
 class OnPremRecord {
   final String profileId;
@@ -154,7 +154,7 @@ class OnPremEntry {
   String? get connectIp => device?.ipv4;
 }
 
-const String kOptionForKoreanOnPremRustDeskMemos = 'for-korean-onprem-rustdesk-memos';
+const String kOptionPublicOnPremRustDeskMemos = 'public-onprem-rustdesk-memos';
 
 /// A device's RustDesk as the last finished check saw it.
 enum OnPremRustDesk { reachable, directOff, missing }

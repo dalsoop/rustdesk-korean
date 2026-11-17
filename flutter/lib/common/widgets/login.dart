@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common/hbbs/hbbs.dart';
-import 'package:flutter_hbb/common/for_korean_login.dart';
+import 'package:flutter_hbb/common/public_login.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/user_model.dart';
 import 'package:get/get.dart';
@@ -753,9 +753,9 @@ Future<bool?> _openLoginDialog() async {
 
   Future.delayed(Duration.zero, fetchLoginOptions);
 
-  // Korean fork, for-korean flavor: RustDesk's public server refuses account
+  // Korean fork, Public flavor: RustDesk's public server refuses account
   // passwords, so only its third-party sign-ins are offered there.
-  final thirdPartyOnly = bind.mainIsForKoreanFlavor() &&
+  final thirdPartyOnly = bind.mainIsPublicFlavor() &&
       isRustDeskPublicApiServer(await bind.mainGetApiServer());
 
   final res = await gFFI.dialogManager.show<bool>((setState, close, context) {
@@ -985,7 +985,7 @@ Future<bool?> _openLoginDialog() async {
           ),
           if (thirdPartyOnly)
             Text(
-              translate('for_korean_server_login_tip'),
+              translate('public_server_login_tip'),
               textAlign: TextAlign.center,
             ),
           if (!thirdPartyOnly)

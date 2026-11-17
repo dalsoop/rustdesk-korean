@@ -1,5 +1,5 @@
-//! Korean fork: the for-korean build flavor ("RustDesk (for korean) 접속"), chosen at build time
-//! with `RUSTDESK_FLAVOR=for-korean` (build.rs turns it into `RUSTDESK_BUILD_FLAVOR`).
+//! Korean fork: the "RustDesk Public" build flavor, chosen at build time with
+//! `RUSTDESK_FLAVOR=public` (build.rs turns it into `RUSTDESK_BUILD_FLAVOR`).
 //!
 //! A separate app for reaching peers through the public RustDesk server. It runs under its own
 //! app name, so its config, socket and log folders never mix with the main app's, and it only
@@ -19,20 +19,20 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub const APP_NAME: &str = "RustDeskForKorean";
+pub const APP_NAME: &str = "RustDeskPublic";
 const TAILSCALE_RANGE: &str = "100.64.0.0/10";
 const INTERNAL_ID_DOMAIN: &str = "@rustdesk.internal.kr";
-const CLEANUP_DONE_OPTION: &str = "for-korean-flavor-cleanup-done";
+const CLEANUP_DONE_OPTION: &str = "public-flavor-cleanup-done";
 pub const DISCOVERY_PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
 
 #[inline]
-pub fn is_for_korean() -> bool {
-    option_env!("RUSTDESK_BUILD_FLAVOR") == Some("for-korean")
+pub fn is_public() -> bool {
+    option_env!("RUSTDESK_BUILD_FLAVOR") == Some("public")
 }
 
 /// Must run before anything reads the config: the app name decides where the config lives.
 pub fn init() {
-    if !is_for_korean() {
+    if !is_public() {
         return;
     }
     static INIT: std::sync::Once = std::sync::Once::new();
@@ -163,7 +163,7 @@ pub fn probe_rustdesk(ip: IpAddr, timeout: Duration) -> Option<RustDeskPeer> {
     }
 }
 
-/// JSON `{"id","hostname","platform"}` for the for-korean home cards, or "" when nothing answered.
+/// JSON `{"id","hostname","platform"}` for the Public home cards, or "" when nothing answered.
 pub fn probe_rustdesk_json(ip: &str) -> String {
     let Ok(ip) = ip.parse::<IpAddr>() else {
         return String::new();

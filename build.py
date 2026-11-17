@@ -952,36 +952,33 @@ def build_deb_from_folder(version, binary_folder, want_drm=False):
     os.chdir("..")
 
 
-# Korean fork: RUSTDESK_FLAVOR=for-korean builds the separate outgoing-only app shown as
-# "RustDesk (for korean) 접속". Cargo reads the same variable in build.rs; Xcode gets the app
-# identity from Flavor.xcconfig, which Runner/Configs/AppInfo.xcconfig includes when it exists.
-# The identity history of this flavor is in KOREAN.md.
+# Korean fork: RUSTDESK_FLAVOR=public builds the separate "RustDesk Public" app. Cargo reads the
+# same variable in build.rs; Xcode gets the app identity from Flavor.xcconfig, which
+# Runner/Configs/AppInfo.xcconfig includes when it exists.
 RUSTDESK_FLAVOR = os.environ.get('RUSTDESK_FLAVOR', '')
-if RUSTDESK_FLAVOR not in ('', 'for-korean'):
-    raise Exception(f'Unknown RUSTDESK_FLAVOR {RUSTDESK_FLAVOR!r}; expected "for-korean" or unset')
+if RUSTDESK_FLAVOR not in ('', 'public'):
+    raise Exception(f'Unknown RUSTDESK_FLAVOR {RUSTDESK_FLAVOR!r}; expected "public" or unset')
 MACOS_FLAVOR_XCCONFIG = os.path.join(REPO_ROOT, 'flutter', 'macos', 'Runner', 'Configs', 'Flavor.xcconfig')
-FOR_KOREAN_APP_NAME = 'RustDeskForKorean'
-# Keep equal to kForKoreanAppDisplayName in flutter/lib/common.dart.
-FOR_KOREAN_APP_DISPLAY_NAME = 'RustDesk (for korean) 접속'
-FOR_KOREAN_FLAVOR_XCCONFIG = f'''PRODUCT_NAME = {FOR_KOREAN_APP_NAME}
+PUBLIC_APP_NAME = 'RustDeskPublic'
+PUBLIC_FLAVOR_XCCONFIG = f'''PRODUCT_NAME = {PUBLIC_APP_NAME}
 // MainMenu.xib names its classes in module RustDesk.
 PRODUCT_MODULE_NAME = RustDesk
-RUSTDESK_BUNDLE_IDENTIFIER = net.ranode.rustdesk-for-korean
-RUSTDESK_DISPLAY_NAME = {FOR_KOREAN_APP_DISPLAY_NAME}
-RUSTDESK_URL_SCHEME = rustdeskforkorean
+RUSTDESK_BUNDLE_IDENTIFIER = net.ranode.rustdesk-public
+RUSTDESK_DISPLAY_NAME = RustDesk (forked ranode)
+RUSTDESK_URL_SCHEME = rustdeskpublic
 '''
 
 
 def macos_app_bundle():
-    return (FOR_KOREAN_APP_NAME if RUSTDESK_FLAVOR == 'for-korean' else 'RustDesk') + '.app'
+    return (PUBLIC_APP_NAME if RUSTDESK_FLAVOR == 'public' else 'RustDesk') + '.app'
 
 
 # Korean fork: the main (incoming) app shows as "RustDesk (for korean)" in Finder, Launchpad,
 # Spotlight and the privacy settings, with a green badge, so it never looks like the official
-# RustDesk or like "RustDesk (for korean) 접속". The bundle file must stay RustDesk.app (the service
+# RustDesk or like RustDesk (forked ranode). The bundle file must stay RustDesk.app (the service
 # plists, the updater and src/platform/macos.rs use /Applications/RustDesk.app), so this is a
 # localized display name: CFBundleDisplayName equals the file name and en.lproj/InfoPlist.strings
-# carries the shown name. Added after the build so the for-korean flavor never gets these resources.
+# carries the shown name. Added after the build so the Public flavor never gets these resources.
 MAIN_APP_DISPLAY_NAME = 'RustDesk (for korean)'
 
 
@@ -1003,9 +1000,9 @@ def brand_macos_main_app(app_path):
 
 
 def write_macos_flavor_xcconfig():
-    if RUSTDESK_FLAVOR == 'for-korean':
+    if RUSTDESK_FLAVOR == 'public':
         with open(MACOS_FLAVOR_XCCONFIG, 'w', encoding='utf-8') as f:
-            f.write(FOR_KOREAN_FLAVOR_XCCONFIG)
+            f.write(PUBLIC_FLAVOR_XCCONFIG)
     elif os.path.exists(MACOS_FLAVOR_XCCONFIG):
         os.remove(MACOS_FLAVOR_XCCONFIG)
 
@@ -1027,10 +1024,10 @@ def build_flutter_dmg(version, features):
     system2(
         f'FLUTTER_XCODE_ARCHS={mac_arch} FLUTTER_XCODE_ONLY_ACTIVE_ARCH=YES flutter build macos --release')
     system2(f'cp -rf ../target/release/service ./build/macos/Build/Products/Release/{macos_app_bundle()}/Contents/MacOS/')
-    # Korean fork: the for-korean app gets its own Dock/Finder icon (globe badge) so it never looks
+    # Korean fork: RustDesk Public gets its own Dock/Finder icon (globe badge) so it never looks
     # like the main app. The bundle is re-signed afterwards (res/osx-sign-notarize.sh).
-    if RUSTDESK_FLAVOR == 'for-korean':
-        system2(f'cp -f macos/Runner/AppIconForKorean.icns ./build/macos/Build/Products/Release/{macos_app_bundle()}/Contents/Resources/AppIcon.icns')
+    if RUSTDESK_FLAVOR == 'public':
+        system2(f'cp -f macos/Runner/AppIconPublic.icns ./build/macos/Build/Products/Release/{macos_app_bundle()}/Contents/Resources/AppIcon.icns')
     else:
         brand_macos_main_app(f'./build/macos/Build/Products/Release/{macos_app_bundle()}')
     '''

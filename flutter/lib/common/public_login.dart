@@ -1,4 +1,4 @@
-// Korean fork, for-korean flavor: RustDesk's public server takes only
+// Korean fork, RustDesk Public flavor: RustDesk's public server takes only
 // third-party sign-ins (Google, GitHub, ...) and refuses connections made
 // before one.
 

@@ -1,5 +1,5 @@
-import 'package:flutter_hbb/common/for_korean_login.dart';
-import 'package:flutter_hbb/common/for_korean_onprem.dart';
+import 'package:flutter_hbb/common/public_login.dart';
+import 'package:flutter_hbb/common/public_onprem.dart';
 import 'package:flutter_hbb/common/tailscale.dart';
 import 'package:flutter_hbb/common/tailscale_range.dart';
 import 'package:flutter_test/flutter_test.dart';

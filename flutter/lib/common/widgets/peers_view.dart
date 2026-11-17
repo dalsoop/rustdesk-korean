@@ -457,7 +457,7 @@ class RecentPeersView extends BasePeersView {
       : super(
           key: key,
           peerTabIndex: PeerTabIndex.recent,
-          peerFilter: bind.mainIsForKoreanFlavor()
+          peerFilter: bind.mainIsPublicFlavor()
               ? (Peer peer) => !isTailscaleRangeId(peer.id)
               : null,
           peerCardBuilder: (Peer peer) => RecentPeerCard(
@@ -480,7 +480,7 @@ class FavoritePeersView extends BasePeersView {
       : super(
           key: key,
           peerTabIndex: PeerTabIndex.fav,
-          peerFilter: bind.mainIsForKoreanFlavor()
+          peerFilter: bind.mainIsPublicFlavor()
               ? (Peer peer) => !isTailscaleRangeId(peer.id)
               : null,
           peerCardBuilder: (Peer peer) => FavoritePeerCard(
