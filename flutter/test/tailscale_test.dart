@@ -67,6 +67,25 @@ e4e8  urit245@gmail.com       urit245@gmail.com*
     expect(status.devices[1].ipv4, '100.64.0.3');
   });
 
+  test('status json gives this Mac its own IPv4, or null when Self has none',
+      () {
+    const output = '''
+{
+  "BackendState": "Running",
+  "Self": {"ID": "n1", "TailscaleIPs": ["fd7a:115c:a1e0::1", "100.64.0.1"]},
+  "Peer": {"nodekey:a": {"ID": "n2", "TailscaleIPs": ["100.64.0.2"]}}
+}
+''';
+    expect(parseTailscaleStatusJson(output).selfIpv4, '100.64.0.1');
+    expect(
+        parseTailscaleStatusJson('{"BackendState": "Running", '
+                '"Self": {"ID": "n1", "TailscaleIPs": ["fd7a:115c:a1e0::1"]}}')
+            .selfIpv4,
+        isNull);
+    expect(parseTailscaleStatusJson('{"BackendState": "Stopped"}').selfIpv4,
+        isNull);
+  });
+
   test('status json tells sign-in and approval apart from a stopped Tailscale',
       () {
     TailscaleState stateOf(String backend) =>

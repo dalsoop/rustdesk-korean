@@ -4,9 +4,9 @@ This file is written in English only.
 
 A personal fork of upstream RustDesk 1.5.0 for the owner's own devices: Korean input and the
 한/영 key across macOS, Windows, Linux and Android, plus two macOS apps built from one tree —
-the main app "RustDesk (for korean)" (accepts incoming connections) and the second app
-"RustDesk (forked ranode)" (outgoing; on-prem tab over Tailscale and internet tab over the public
-RustDesk server). Users: the owner's Macs, the office Linux server, the owner's Android phone.
+the main app "RustDesk (for korean)" (accepts incoming connections; to be removed from the owner's
+Macs) and the second app "RustDesk (forked ranode)" (on-prem tab over Tailscale, internet tab over
+the public RustDesk server, and from ko.23 also incoming from the tailnet). Users: the owner's Macs, the office Linux server, the owner's Android phone.
 Releases are public GitHub prereleases/releases, but nobody outside those devices is a target.
 Nothing goes back upstream; upstream changes are merged in. Everything below this fork section,
 from "# RustDesk Guide" on, is upstream's guide and stays byte-identical to upstream.

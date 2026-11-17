@@ -205,6 +205,9 @@ pub fn core_main() -> Option<Vec<String>> {
         }
         std::thread::spawn(move || crate::start_server(false, no_server));
     } else {
+        if let Some(code) = crate::public_flavor::handle_cli(&args) {
+            std::process::exit(code);
+        }
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         // Root CLI management commands must talk to the user `--server` main IPC.
         // Example: `sudo rustdesk --option custom-rendezvous-server` should query the

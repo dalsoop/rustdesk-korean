@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 const int kRustDeskDirectPort = 21118;
 const Duration kRustDeskPortCheckTimeout = Duration(milliseconds: 1500);
 const Duration kTailscaleCommandTimeout = Duration(seconds: 5);
@@ -101,8 +103,11 @@ RustDeskPeerInfo? parseRustDeskProbe(String output) {
 class TailscaleStatus {
   final TailscaleState state;
   final List<TailscaleDevice> devices;
+  // This Mac's own address, from the Self entry.
+  final String? selfIpv4;
 
-  const TailscaleStatus({required this.state, required this.devices});
+  const TailscaleStatus(
+      {required this.state, required this.devices, this.selfIpv4});
 
   static const notFound =
       TailscaleStatus(state: TailscaleState.notFound, devices: []);
@@ -114,11 +119,13 @@ class TailscaleSnapshot {
   final TailscaleState state;
   final List<TailscaleProfile> profiles;
   final List<TailscaleDevice> devices;
+  final String? selfIpv4;
 
   const TailscaleSnapshot({
     required this.state,
     required this.profiles,
     required this.devices,
+    this.selfIpv4,
   });
 
   TailscaleProfile? get activeProfile {
@@ -199,7 +206,12 @@ TailscaleStatus parseTailscaleStatusJson(String output) {
     }
   }
   devices.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-  return TailscaleStatus(state: state, devices: devices);
+  return TailscaleStatus(
+      state: state,
+      devices: devices,
+      selfIpv4: self is Map<String, dynamic>
+          ? _firstIpv4(self['TailscaleIPs'])
+          : null);
 }
 
 String _deviceName(Map<String, dynamic> peer) {
@@ -341,6 +353,10 @@ class Tailscale {
 
   static Future<TailscaleSnapshot>? _reading;
 
+  /// The result of the last finished read, for views that show it without
+  /// starting reads of their own.
+  static final ValueNotifier<TailscaleSnapshot?> latest = ValueNotifier(null);
+
   /// One read at a time: callers that ask while a read is running (the
   /// "Check again" button, the re-check timer, the window coming back to the
   /// front) get that read's result instead of starting more CLI processes.
@@ -357,11 +373,14 @@ class Tailscale {
   static Future<TailscaleSnapshot> _read() async {
     final results = await Future.wait([readStatus(), listProfiles()]);
     final status = results[0] as TailscaleStatus;
-    return TailscaleSnapshot(
+    final snapshot = TailscaleSnapshot(
       state: status.state,
       profiles: results[1] as List<TailscaleProfile>,
       devices: status.devices,
+      selfIpv4: status.selfIpv4,
     );
+    latest.value = snapshot;
+    return snapshot;
   }
 
   static Future<bool> switchProfile(String profileId) async {

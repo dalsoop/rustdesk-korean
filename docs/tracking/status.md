@@ -16,8 +16,12 @@ This file is written in English only.
 
 - ko.21 is released (2026-11-17): ranode recovers by itself when Tailscale stops answering (PR #33);
   the unreleased renames were reverted (#32).
-- ko.22 (version `1.5.0+6822`, in PR, not merged): ranode reads Tailscale when opened from Finder,
+- ko.22 (version `1.5.0+6822`, merged as PR #35): ranode reads Tailscale when opened from Finder,
   the Dock or at login (`TERM=dumb` for the CLI).
+- ko.23 (version `1.5.0+6823`, merged): ranode also accepts incoming connections from the tailnet
+  with its permanent password only; left pane "이 Mac에 접속받기"; `--set-permanent-password`.
+  Built: Rust compiled in the Windows/Linux CI build; Flutter tests green in CI; the Rust unit
+  tests (`public_flavor`) are compiled and run first on the owner's release Mac.
 
 ## Remaining, in order
 
@@ -26,10 +30,26 @@ This file is written in English only.
    Latest, launch the signed ranode from Finder with Tailscale up (device list appears), stopped,
    restarting and absent (each shows its own state), and once from a terminal (unchanged). Mark
    Latest only after that check passes.
-2. **ko.23**: ranode also accepts incoming connections (Tailscale range only, direct port 21118, no
-   RustDesk ID, no service, same permanent password), taking over port 21118 once the main app is
-   gone; its left pane stops saying "접속하는 쪽 전용".
-3. Removal of the main app from the owner's Macs and the switch of their setup (permissions,
+2. **ko.23 release (handed to the owner)**: on the owner's release Mac, from the merge commit of
+   the ko.23 PR (`version: 1.5.0+6823`): run `cargo test --lib public_flavor` (must pass; first
+   time these tests compile), build both macOS apps, sign, then on the signed ranode check:
+   1. another tailnet Mac connects by this Mac's Tailscale IP + permanent password and controls it;
+   2. a connection through the public server (non-Tailscale address) is refused;
+   3. with the main app running, ranode works outgoing and does not take 21118;
+   4. after quitting the main app and relaunching ranode, ranode accepts;
+   5. the left pane shows the address and password status; missing Screen Recording /
+      Accessibility grants show their cards; with the service stopped it says
+      "지금은 접속받지 않음 (서비스 중지됨)";
+   6. `--set-permanent-password` with the password on stdin sets it (exit 0), exits non-zero with
+      ranode quit, and is refused under sudo;
+   7. a one-time password is refused; the permanent password works.
+   Mark Latest only after all pass. Release ko.22 first (or fold it in: ko.23 contains it).
+3. **Machine-setup cutover (after ko.23 is released)**, for each owner Mac: install ko.23 ranode;
+   grant it Screen Recording, Accessibility and Input Monitoring; quit and remove the main app
+   (and its LaunchAgent/LaunchDaemon where installed) before (re)starting ranode, because ranode retakes a busy 21118 only at its next start; start
+   ranode and add it as a login item; set the vault password with `--set-permanent-password`
+   (stdin, as the user, ranode running); verify from another tailnet Mac.
+4. Removal of the main app from the owner's Macs and the switch of their setup (permissions,
    options, password) to ranode — done in the machine-setup repo after ko.23.
 
 ## Blockers

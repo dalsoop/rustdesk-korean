@@ -99,6 +99,24 @@ on the signed build before marking the release Latest.
 6. Roll out: the owner's Macs pin version + sha256 per app in their machine-setup repo; the office
    Linux server pins `versions.rustdesk` (`1.5.0+koN`), sha256 and URL in its infrastructure repo.
 
+## ranode as the receiving app (from ko.23)
+
+Order on a Mac that still has the main app (ranode retakes a busy 21118 only when it starts). If
+the main app's service is installed (`/Library/LaunchDaemons/com.carriez.RustDesk_service.plist`,
+`/Library/LaunchAgents/com.carriez.RustDesk_server.plist`), its `--server` keeps 21118 after the
+window quits: unload and remove both plists (admin) before starting ranode.
+
+```sh
+osascript -e 'quit app "RustDesk"'             # the main app releases 21118
+rm -rf /Applications/RustDesk.app               # after the cutover is approved
+open -a "/Applications/RustDesk (forked ranode).app"
+printf '%s\n' "$PASSWORD" | "/Applications/RustDesk (forked ranode).app/Contents/MacOS/RustDeskPublic" --set-permanent-password
+```
+
+The last command runs as the logged-in user (never `sudo`), needs ranode running, prints `Done!`
+and exits 0; exit 2 means ranode was not running or did not apply it. Take `$PASSWORD` from the
+vault without echoing it. ranode then needs Screen Recording, Accessibility and Input Monitoring.
+
 ## Install by hand on a Mac
 
 ```sh

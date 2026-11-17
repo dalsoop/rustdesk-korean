@@ -82,7 +82,16 @@ local keys kept going to the peer; release both when the mode changes (fixed ko.
   `RustDesk (forked ranode).app`. The value is also handed over IPC to the running app, which
   writes its own config, so the app must be running.
 - Response: ranode settings that must be set come from `override_settings()` in code, never from
-  the machine setup's `--option`.
+  the machine setup's `--option`; its permanent password goes in with
+  `RustDeskPublic --set-permanent-password` (stdin, as the user, ranode running).
+
+## ranode does not take over a busy 21118 by itself
+
+- Symptom: with the main app running, ranode never accepts incoming, even after the main app quits.
+- Cause: upstream's direct listener, when the bind fails, waits only for the port number to change
+  and never retries the same port.
+- Response: quit (and remove) the main app first, then start ranode; verify by connecting from
+  another tailnet Mac.
 
 ## Release on macOS: the nested `service` binary
 

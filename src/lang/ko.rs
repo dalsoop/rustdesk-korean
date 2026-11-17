@@ -840,7 +840,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_onprem_choice_tip", "Tailscale로 연결된 팀 Mac·PC를 목록에서 골라 바로 접속합니다. Tailscale 앱과 팀에서 초대받은 계정이 필요합니다."),
         ("Connect over the internet", "인터넷으로 접속"),
         ("public_internet_choice_tip", "상대가 알려 준 RustDesk ID와 비밀번호로 접속합니다. RustDesk 계정 로그인이 필요합니다."),
-        ("public_incoming_tip", "이 앱으로는 다른 기기가 이 Mac에 접속할 수 없습니다. 다른 사람이 이 Mac에 접속하게 하려면 RustDesk 본 앱을 쓰세요."),
+        ("public_incoming_tip", "같은 Tailscale 망의 기기가 이 Mac의 Tailscale 주소와 비밀번호로 접속합니다. Tailscale 밖에서는 접속할 수 없습니다."),
         ("Later", "나중에"),
         ("Show the welcome guide", "시작 안내 다시 보기"),
         ("Outgoing connections only", "접속하는 쪽 전용"),
@@ -881,5 +881,13 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_no_tailscale_hint", "이 Mac에 Tailscale을 설치하면 팀 기기 목록이 여기에 나타납니다."),
         ("public_server_login_tip", "공용 서버는 무료 로그인이 필요합니다 · Google 등으로 로그인하세요"),
         ("public_login_required_tip", "RustDesk 공용 서버는 로그인해야 접속할 수 있습니다. 로그인은 무료이며 Google 등의 계정으로 할 수 있습니다. \"로그인\"을 누르면 로그인 뒤 다시 접속합니다."),
+        ("Receive connections on this Mac", "이 Mac에 접속받기"),
+        ("public_incoming_address_{}", "Tailscale 주소: {}"),
+        ("public_incoming_needs_tailscale", "Tailscale이 켜져 있어야 접속받을 수 있습니다"),
+        ("public_password_set", "비밀번호: 설정됨"),
+        ("public_password_not_set", "비밀번호: 설정 안 됨"),
+        ("public_incoming_stopped", "지금은 접속받지 않음 (서비스 중지됨)"),
+        ("public_config_screen", "다른 기기가 이 Mac의 화면을 보려면 시스템 설정 → 개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음에서 \"RustDesk (forked ranode)\"를 켜세요."),
+        ("public_config_acc", "다른 기기가 이 Mac을 조작하려면 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용에서 \"RustDesk (forked ranode)\"를 켜세요."),
     ].iter().cloned().collect();
 }
