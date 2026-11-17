@@ -3020,15 +3020,14 @@ int versionCmp(String v1, String v2) {
   return bind.versionToNumber(v: v1) - bind.versionToNumber(v: v2);
 }
 
-/// Korean fork: the for-korean flavor's display name (CFBundleName, FOR_KOREAN_APP_DISPLAY_NAME in
-/// build.py's Flavor.xcconfig; keep the two equal). Its internal app name is
-/// RustDeskForKorean (config folder, socket, logs).
-const String kForKoreanAppDisplayName = 'RustDesk (for korean) 접속';
+/// Korean fork: the Public flavor's display name (CFBundleName, set in build.py's Flavor.xcconfig).
+/// Its internal app name stays RustDeskPublic (config folder, socket, logs).
+const String kPublicAppDisplayName = 'RustDesk (forked ranode)';
 
 String getWindowName({WindowType? overrideType}) {
-  // Korean fork: the for-korean flavor's app name has no space; titles show the display name.
-  final name = bind.mainIsForKoreanFlavor()
-      ? kForKoreanAppDisplayName
+  // Korean fork: the Public flavor's app name has no space; titles show the display name.
+  final name = bind.mainIsPublicFlavor()
+      ? kPublicAppDisplayName
       : bind.mainGetAppNameSync();
   switch (overrideType ?? kWindowType) {
     case WindowType.Main:

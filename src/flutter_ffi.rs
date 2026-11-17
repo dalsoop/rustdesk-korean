@@ -2536,12 +2536,12 @@ pub fn is_custom_client() -> SyncReturn<bool> {
     SyncReturn(crate::common::is_custom_client())
 }
 
-pub fn main_is_for_korean_flavor() -> SyncReturn<bool> {
-    SyncReturn(crate::for_korean_flavor::is_for_korean())
+pub fn main_is_public_flavor() -> SyncReturn<bool> {
+    SyncReturn(crate::public_flavor::is_public())
 }
 
-pub fn main_for_korean_probe_rustdesk(ip: String) -> String {
-    crate::for_korean_flavor::probe_rustdesk_json(&ip)
+pub fn main_public_probe_rustdesk(ip: String) -> String {
+    crate::public_flavor::probe_rustdesk_json(&ip)
 }
 
 pub fn is_disable_settings() -> SyncReturn<bool> {

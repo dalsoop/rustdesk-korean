@@ -133,7 +133,7 @@ class _OnlineStatusWidgetState extends State<OnlineStatusWidget> {
             if (!isIncomingOnly) startServiceWidget(),
             // ready && public
             // No need to show the guide if is custom client.
-            if (!isIncomingOnly && !bind.mainIsForKoreanFlavor())
+            if (!isIncomingOnly && !bind.mainIsPublicFlavor())
               setupServerWidget(),
           ],
         );
@@ -304,8 +304,8 @@ class _ConnectionPageState extends State<ConnectionPage>
 
   @override
   Widget build(BuildContext context) {
-    // The for-korean flavor draws its own status bar, one per home tab.
-    final isOutgoingOnly = bind.isOutgoingOnly() || bind.mainIsForKoreanFlavor();
+    // Public draws its own status bar, one per home tab.
+    final isOutgoingOnly = bind.isOutgoingOnly() || bind.mainIsPublicFlavor();
     return Column(
       children: [
         Expanded(

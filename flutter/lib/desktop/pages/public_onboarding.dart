@@ -1,4 +1,4 @@
-// Korean fork, for-korean flavor ("RustDesk (for korean) 접속"): what a new user needs on the home
+// Korean fork, RustDesk Public flavor: what a new user needs on the home
 // screen. A first-run guide that picks the start tab, the left-pane note that
 // this app only makes outgoing connections, a next step for every Tailscale
 // state, the reason a device card cannot be used, and the internet sign-in.
@@ -14,23 +14,23 @@ import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const String kOptionForKoreanWelcomeDone = 'for-korean-welcome-done';
-const String kOptionForKoreanStartTab = 'for-korean-start-tab';
+const String kOptionPublicWelcomeDone = 'public-welcome-done';
+const String kOptionPublicStartTab = 'public-start-tab';
 const String _kStartTabInternet = 'internet';
 const String _kStartTabOnPrem = 'onprem';
 const String _kTailscaleDownloadUrl = 'https://tailscale.com/download/mac';
 
-bool get forKoreanWelcomeDone =>
-    bind.getLocalFlutterOption(k: kOptionForKoreanWelcomeDone) == 'Y';
+bool get publicWelcomeDone =>
+    bind.getLocalFlutterOption(k: kOptionPublicWelcomeDone) == 'Y';
 
-bool get forKoreanStartsOnInternet =>
-    bind.getLocalFlutterOption(k: kOptionForKoreanStartTab) == _kStartTabInternet;
+bool get publicStartsOnInternet =>
+    bind.getLocalFlutterOption(k: kOptionPublicStartTab) == _kStartTabInternet;
 
 /// Asks how the user will connect; [onChoose] gets true for the internet tab.
 /// Closing it without a choice keeps the start tab as it was. Without
 /// Tailscale on this Mac ([teamDevices] false) there is nothing to choose: the
 /// guide explains the internet connection alone.
-void showForKoreanWelcome(void Function(bool internet) onChoose,
+void showPublicWelcome(void Function(bool internet) onChoose,
     {bool teamDevices = true}) {
   if (!teamDevices) {
     _showInternetOnlyWelcome();
@@ -38,32 +38,32 @@ void showForKoreanWelcome(void Function(bool internet) onChoose,
   }
   gFFI.dialogManager.show((setState, close, context) {
     void finish(bool? internet) {
-      bind.setLocalFlutterOption(k: kOptionForKoreanWelcomeDone, v: 'Y');
+      bind.setLocalFlutterOption(k: kOptionPublicWelcomeDone, v: 'Y');
       close();
       if (internet == null) return;
       bind.setLocalFlutterOption(
-          k: kOptionForKoreanStartTab,
+          k: kOptionPublicStartTab,
           v: internet ? _kStartTabInternet : _kStartTabOnPrem);
       onChoose(internet);
     }
 
     final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
     return CustomAlertDialog(
-      title: Text(translate('Welcome to {$kForKoreanAppDisplayName}')),
+      title: Text(translate('Welcome to {$kPublicAppDisplayName}')),
       contentBoxConstraints: const BoxConstraints(maxWidth: 460),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(translate('for_korean_welcome_tip')),
+          Text(translate('public_welcome_tip')),
           const SizedBox(height: 14),
           _choiceCard(context, Icons.lan_outlined, 'Connect to team devices',
-              'for_korean_onprem_choice_tip', () => finish(false)),
+              'public_onprem_choice_tip', () => finish(false)),
           const SizedBox(height: 10),
           _choiceCard(context, Icons.public, 'Connect over the internet',
-              'for_korean_internet_choice_tip', () => finish(true)),
+              'public_internet_choice_tip', () => finish(true)),
           const SizedBox(height: 14),
-          Text(translate('for_korean_incoming_tip'), style: hint),
+          Text(translate('public_incoming_tip'), style: hint),
         ],
       ),
       actions: [
@@ -77,21 +77,21 @@ void showForKoreanWelcome(void Function(bool internet) onChoose,
 void _showInternetOnlyWelcome() {
   gFFI.dialogManager.show((setState, close, context) {
     void finish() {
-      bind.setLocalFlutterOption(k: kOptionForKoreanWelcomeDone, v: 'Y');
+      bind.setLocalFlutterOption(k: kOptionPublicWelcomeDone, v: 'Y');
       close();
     }
 
     final hint = TextStyle(fontSize: 12, color: Theme.of(context).hintColor);
     return CustomAlertDialog(
-      title: Text(translate('Welcome to {$kForKoreanAppDisplayName}')),
+      title: Text(translate('Welcome to {$kPublicAppDisplayName}')),
       contentBoxConstraints: const BoxConstraints(maxWidth: 460),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(translate('for_korean_welcome_internet_tip')),
+          Text(translate('public_welcome_internet_tip')),
           const SizedBox(height: 14),
-          Text(translate('for_korean_incoming_tip'), style: hint),
+          Text(translate('public_incoming_tip'), style: hint),
         ],
       ),
       actions: [dialogButton('Start', onPressed: finish)],
@@ -136,10 +136,10 @@ Widget _choiceCard(BuildContext context, IconData icon, String title,
   );
 }
 
-/// "RustDesk (for korean) 접속 1.5.0 (ko.N)" in the tab bar, so this window is never taken for the main
+/// "RustDesk (forked ranode) 1.5.0 (ko.N)" in the tab bar, so this window is never taken for the main
 /// RustDesk app. The fork build number is upstream build * 100 + N (pubspec.yaml).
-class ForKoreanAppLabel extends StatelessWidget {
-  const ForKoreanAppLabel({Key? key}) : super(key: key);
+class PublicAppLabel extends StatelessWidget {
+  const PublicAppLabel({Key? key}) : super(key: key);
 
   static final Future<String> _versionOnce = _version();
 
@@ -159,7 +159,7 @@ class ForKoreanAppLabel extends StatelessWidget {
         children: [
           const Icon(Icons.public, size: 14, color: Color(0xFFFF8500)),
           const SizedBox(width: 4),
-          const Text(kForKoreanAppDisplayName,
+          const Text(kPublicAppDisplayName,
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           if (snapshot.hasData) const SizedBox(width: 6),
           if (snapshot.hasData)
@@ -171,8 +171,8 @@ class ForKoreanAppLabel extends StatelessWidget {
 }
 
 /// Left pane text in place of the incoming ID and password board.
-class ForKoreanIntroCard extends StatelessWidget {
-  const ForKoreanIntroCard({Key? key}) : super(key: key);
+class PublicIntroCard extends StatelessWidget {
+  const PublicIntroCard({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +184,7 @@ class ForKoreanIntroCard extends StatelessWidget {
           Text(translate('Outgoing connections only'),
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 10),
-          Text(translate('for_korean_incoming_tip'),
+          Text(translate('public_incoming_tip'),
               style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
@@ -194,13 +194,13 @@ class ForKoreanIntroCard extends StatelessWidget {
 
 /// The next step for an on-prem tab that has no device to show. [state] is
 /// [TailscaleState.running] when the tailnet simply has no other device.
-class ForKoreanTailscaleGuide extends StatelessWidget {
+class PublicTailscaleGuide extends StatelessWidget {
   final TailscaleState state;
   // Null while a read is already running.
   final VoidCallback? onCheckAgain;
   final VoidCallback onUseInternet;
 
-  const ForKoreanTailscaleGuide({
+  const PublicTailscaleGuide({
     Key? key,
     required this.state,
     required this.onCheckAgain,
@@ -216,32 +216,32 @@ class ForKoreanTailscaleGuide extends StatelessWidget {
       TailscaleState.notFound when installed => (
           Icons.sync_problem,
           'Tailscale is not responding',
-          'for_korean_ts_not_responding_tip'
+          'public_ts_not_responding_tip'
         ),
       TailscaleState.notFound => (
           Icons.download_outlined,
           'Tailscale is not installed',
-          'for_korean_ts_install_tip'
+          'public_ts_install_tip'
         ),
       TailscaleState.stopped => (
           Icons.power_settings_new,
           'Tailscale is turned off',
-          'for_korean_ts_off_tip'
+          'public_ts_off_tip'
         ),
       TailscaleState.needsLogin => (
           Icons.login,
           'Sign in to Tailscale',
-          'for_korean_ts_login_tip'
+          'public_ts_login_tip'
         ),
       TailscaleState.needsApproval => (
           Icons.hourglass_empty,
           'Waiting for administrator approval',
-          'for_korean_ts_approval_tip'
+          'public_ts_approval_tip'
         ),
       TailscaleState.running => (
           Icons.devices_other,
           'No other devices in this network',
-          'for_korean_ts_empty_tip'
+          'public_ts_empty_tip'
         ),
     };
     final canOpenApp = state == TailscaleState.stopped ||
@@ -305,14 +305,14 @@ class ForKoreanTailscaleGuide extends StatelessWidget {
   }
 }
 
-enum ForKoreanPeerProblem { directOff, missing, offline }
+enum PublicPeerProblem { directOff, missing, offline }
 
 /// Says why [deviceName] cannot take a connection and what to do about it.
-void showForKoreanPeerHelp(String deviceName, ForKoreanPeerProblem problem) {
+void showPublicPeerHelp(String deviceName, PublicPeerProblem problem) {
   final tip = switch (problem) {
-    ForKoreanPeerProblem.directOff => 'for_korean_direct_off_help',
-    ForKoreanPeerProblem.missing => 'for_korean_missing_help',
-    ForKoreanPeerProblem.offline => 'for_korean_offline_help',
+    PublicPeerProblem.directOff => 'public_direct_off_help',
+    PublicPeerProblem.missing => 'public_missing_help',
+    PublicPeerProblem.offline => 'public_offline_help',
   };
   gFFI.dialogManager.show((setState, close, context) {
     return CustomAlertDialog(
@@ -330,7 +330,7 @@ void showForKoreanPeerHelp(String deviceName, ForKoreanPeerProblem problem) {
 /// screen; after a sign-in the main window refreshes its account and
 /// [onSignedIn] tries the connection again. Otherwise the connection closes,
 /// as after any connection error.
-void showForKoreanLoginRequiredBox(
+void showPublicLoginRequiredBox(
     OverlayDialogManager dialogManager, String title, VoidCallback onSignedIn) {
   dialogManager.dismissAll();
   void closeSession() {
@@ -352,7 +352,7 @@ void showForKoreanLoginRequiredBox(
     (setState, close, context) => CustomAlertDialog(
       title: null,
       content: SelectionArea(
-          child: msgboxContent('error', title, 'for_korean_login_required_tip')),
+          child: msgboxContent('error', title, 'public_login_required_tip')),
       actions: [
         dialogButton('Close', onPressed: closeSession, isOutline: true),
         dialogButton('Login', onPressed: signIn),
@@ -360,14 +360,14 @@ void showForKoreanLoginRequiredBox(
       onSubmit: signIn,
       onCancel: closeSession,
     ),
-    tag: 'for-korean-login-required',
+    tag: 'public-login-required',
   );
 }
 
 /// Shown above the internet tab while no account is signed in: the public
 /// server needs the controlling side to sign in.
-class ForKoreanInternetLoginBanner extends StatelessWidget {
-  const ForKoreanInternetLoginBanner({Key? key}) : super(key: key);
+class PublicInternetLoginBanner extends StatelessWidget {
+  const PublicInternetLoginBanner({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -387,7 +387,7 @@ class ForKoreanInternetLoginBanner extends StatelessWidget {
             const Icon(Icons.info_outline, color: MyTheme.accent),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(translate('for_korean_internet_login_tip'),
+              child: Text(translate('public_internet_login_tip'),
                   style: const TextStyle(fontSize: 13)),
             ),
             const SizedBox(width: 8),
