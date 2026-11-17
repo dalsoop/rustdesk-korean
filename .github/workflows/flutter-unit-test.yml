@@ -1,7 +1,8 @@
 name: flutter unit tests (soft keyboard / Korean)
 
-# Pure Dart tests for the mobile soft-keyboard path. The APK workflow only
-# builds, so these run separately and quickly.
+# Pure Dart tests for the fork's own Flutter code: the mobile soft-keyboard
+# path and the RustDesk (forked ranode) Tailscale/on-prem logic. The build
+# workflows only build, so these run separately and quickly.
 on:
   workflow_dispatch:
   push:
@@ -9,6 +10,8 @@ on:
       - "flutter/lib/models/soft_keyboard_input_utils.dart"
       - "flutter/lib/models/hangul_dubeolsik.dart"
       - "flutter/lib/models/korean_toggle_key.dart"
+      - "flutter/lib/common/tailscale.dart"
+      - "flutter/lib/common/public_onprem.dart"
       - "flutter/test/**"
       - ".github/workflows/flutter-unit-test.yml"
 
@@ -32,4 +35,6 @@ jobs:
           flutter test \
             test/soft_keyboard_input_utils_test.dart \
             test/hangul_dubeolsik_test.dart \
-            test/korean_toggle_key_test.dart
+            test/korean_toggle_key_test.dart \
+            test/tailscale_test.dart \
+            test/public_onprem_test.dart
