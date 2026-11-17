@@ -2,7 +2,7 @@ This file is written in English only.
 
 # Engineering notes
 
-## Tailscale CLI run from a GUI app fails (fixed in ko.21)
+## Tailscale CLI run from a GUI app fails (fixed in ko.22)
 
 - Symptom: ranode launched from Finder/Dock says "Tailscale이 꺼져 있습니다" (or not responding)
   while Tailscale is up; launched from a terminal, or with `open --env TERM=dumb -a "<app>"`, the

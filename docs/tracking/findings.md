@@ -2,26 +2,19 @@ This file is written in English only.
 
 # Findings
 
-## The macOS release path in the release procedure is not available
+## Where the release Macs are is not recorded
 
-- Condition/symptom (2026-11-17): the Mac that signed releases up to ko.20 has no SOPS repo
-  checkout, no age key and no release folders; the former build Mac is not in the tailnet; no
-  `principal-secrets-mono` repo resolves under `dalsoop` or `crosswell-corp`.
-- Blast radius: no macOS release (ko.21 onward) can be signed or notarized.
-- Why not now: which Mac signs and where the owner keeps the keys is the owner's decision.
-- Approach: the owner names a signing Mac, restores the SOPS repo and age key there (or moves the
-  keys to a personal store), and overrides the signing scripts' defaults.
-
-## Personal signing keys were used on a company machine
-
-- Condition: the former signing Mac is a crosswall company Mac Studio, while the Developer ID,
-  notary key and Android key are the owner's personal assets. Who owns `principal-secrets-mono` and
-  the Secrets Manager project `android-signing` could not be checked (the repo was not found; the
-  Bitwarden account used for company machine setup has no organization).
-- Blast radius: personal and company assets mixed on one machine.
-- Why not now: owner decision; nothing was moved.
-- Approach: sign on one of the owner's own Macs; confirm both stores are in the owner's personal
-  accounts.
+- Condition (2026-11-17): releases up to ko.21 were built and signed on a Mac with the toolchain
+  under `~/work/sdk` (paths embedded in the ko.21 binaries; Developer ID signature time 15:13 KST).
+  The company Mac Studio with the same host and user name has no `~/work/sdk`, no SOPS checkout and
+  no age key, so the release Mac is a different machine, most likely on the owner's personal
+  tailnet, and the agents that set up company machines cannot reach it.
+- Blast radius: an agent planning a release cannot tell which Mac or session builds and signs, and
+  may wrongly conclude that releases are blocked (this happened on 2026-11-17).
+- Why not now: which Mac this is, and whether its keys sit in personal stores, is for the owner to
+  confirm; nothing was moved.
+- Approach: the owner confirms the release Mac and its tailnet; the role binding is then written
+  where the owner keeps the device table, and this item closes.
 
 ## Obsolete Android workflows can still be run
 
@@ -41,7 +34,7 @@ This file is written in English only.
 - Blast radius: regressions in the Rust key mapping, ranode core and update check reach the default
   branch unnoticed.
 - Why not now: a Rust test job needs the vcpkg/toolchain setup of the desktop build; not part of the
-  ko.21 fix.
+  Finder fix (ko.22).
 - Approach: add a `cargo test --lib` job for the fork modules in a separate change.
 
 ## Upstream scheduled workflows fail on the fork
@@ -57,7 +50,7 @@ This file is written in English only.
 
 - Condition: 45 remote fork branches, 16 of them unmerged (upstream-feature names and finished
   fork topics); PR #19
-  (Tailscale LocalAPI) is superseded by the ko.21 fix and carries the unmerged `macos-public.yml`.
+  (Tailscale LocalAPI) is superseded by the ko.22 Finder fix and carries the unmerged `macos-public.yml`.
 - Blast radius: an agent may pick an old branch as a base.
-- Why not now: deleting branches cannot be undone; PR #19 is closed as part of ko.21.
+- Why not now: deleting branches cannot be undone; PR #19 is closed when the ko.22 fix merges.
 - Approach: the owner approves a list of branches to delete.
