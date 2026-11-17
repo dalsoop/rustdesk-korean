@@ -12,7 +12,7 @@ This file is written in English only.
 | ranode (on-prem + internet tabs, onboarding, sections, identity, optional Tailscale, public sign-in) | released up to ko.21 (latest release, 2026-11-17) | Flutter tests `tailscale_test`, `public_onprem_test`: 8 passed locally at PR #33 (2026-11-17); run in CI on push from ko.21 |
 | Main app shown as "RustDesk (for korean)" | released ko.19 | installed on the owner's Macs |
 
-## Merged, not released
+## Merged or in PR, not released
 
 - ko.21 is released (2026-11-17): ranode recovers by itself when Tailscale stops answering (PR #33);
   the unreleased renames were reverted (#32).
@@ -20,7 +20,7 @@ This file is written in English only.
   the Dock or at login (`TERM=dumb` for the CLI).
 - ko.23 (version `1.5.0+6823`, merged): ranode also accepts incoming connections from the tailnet
   with its permanent password only; left pane "이 Mac에 접속받기"; `--set-permanent-password`.
-- ko.24 (version `1.5.0+6824`, merged): ranode accepts ID connections like the main app (per-Mac
+- ko.24 (version `1.5.0+6824`, in PR to `feat/sync-upstream-1.5.0`, not merged; awaiting merge): ranode accepts ID connections like the main app (per-Mac
   whitelist and approve mode via `--set-incoming-policy`, floor adds
   `allow-remote-config-modification=N`); the left pane shows the ID.
 - ko.23 and ko.24 ship as internal builds (operations, internal builds), signed with the stable
@@ -35,9 +35,9 @@ This file is written in English only.
    Latest, launch the signed ranode from Finder with Tailscale up (device list appears), stopped,
    restarting and absent (each shows its own state), and once from a terminal (unchanged). Mark
    Latest only after that check passes. Optional once ko.24 is installed internally.
-2. **ko.24 internal build (machine-setup cycle)**, on the company build Mac from the ko.24 merge
-   commit: first `cargo test --lib public_flavor` (must pass; first run of the ko.23 and ko.24
-   tests), then `ranode-build` signed with the stable internal identity (`codesign -dv` shows it,
+2. **ko.24 internal build (machine-setup cycle)**, once the ko.24 PR is merged, on the company
+   build Mac: first `cargo test --lib public_flavor` on the merge commit (must pass; first run of
+   the ko.23 and ko.24 tests), then `ranode-build` signed with the stable internal identity (`codesign -dv` shows it,
    never ad-hoc). ko.23 is not built separately: ko.24 contains it.
 3. **ko.23 live checks, on that internal build, before the cutover**:
    1. another tailnet Mac connects by this Mac's Tailscale IP + permanent password and controls it;
