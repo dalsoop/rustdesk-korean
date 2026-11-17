@@ -23,15 +23,6 @@ This file is written in English only.
 - Approach: sign on one of the owner's own Macs; confirm both stores are in the owner's personal
   accounts.
 
-## KOREAN.md over-generalises same-OS 한/영 behaviour
-
-- Condition: KOREAN.md says keys between the same OS are sent as before regardless of the setting,
-  but Mac → Mac turns the input-source shortcut into F18 when the setting is on (the code and
-  KOREAN.md's own Mac note agree on F18).
-- Blast radius: a reader expects upstream behaviour between two Macs.
-- Why not now: KOREAN.md edits belong to a release change, not a docs-only change.
-- Approach: fix the sentence in the next release's KOREAN.md update.
-
 ## Obsolete Android workflows can still be run
 
 - Condition: `sign-apk.yml` (manual trigger) signs with a throwaway keystore (password 123456) and
@@ -42,15 +33,16 @@ This file is written in English only.
 - Why not now: removing workflows needs the owner's OK.
 - Approach: delete both workflows in a separate change.
 
-## Fork tests are not in CI, and CI does not run on pull requests
+## Fork Rust tests are not in CI, and CI does not run on pull requests
 
-- Condition: `flutter-unit-test.yml` runs only 3 named test files on push (not `tailscale_test`,
-  `public_onprem_test`); no job runs the fork's Rust tests; `ci.yml` is set for `pull_request`, but
-  no pull-request run appears in the Actions history.
-- Blast radius: regressions in ranode and in the key mapping reach the default branch unnoticed.
-- Why not now: a CI change is outside a docs-only change.
-- Approach: add the two test files and a `cargo test --lib` job for the fork modules in a small
-  separate change.
+- Condition: `flutter-unit-test.yml` runs the 5 fork Flutter test files on push, but no job runs the
+  fork's Rust tests, and `ci.yml` is set for `pull_request` but no pull-request run appears in the
+  Actions history.
+- Blast radius: regressions in the Rust key mapping, ranode core and update check reach the default
+  branch unnoticed.
+- Why not now: a Rust test job needs the vcpkg/toolchain setup of the desktop build; not part of the
+  ko.21 fix.
+- Approach: add a `cargo test --lib` job for the fork modules in a separate change.
 
 ## Upstream scheduled workflows fail on the fork
 

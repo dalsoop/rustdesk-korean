@@ -2,7 +2,7 @@ This file is written in English only.
 
 # Engineering notes
 
-## Tailscale CLI run from a GUI app fails (open; fix planned for ko.21, not in the code yet)
+## Tailscale CLI run from a GUI app fails (fixed in ko.21)
 
 - Symptom: ranode launched from Finder/Dock says "Tailscale이 꺼져 있습니다" (or not responding)
   while Tailscale is up; launched from a terminal, or with `open --env TERM=dumb -a "<app>"`, the
@@ -13,8 +13,10 @@ This file is written in English only.
   prints "The Tailscale GUI failed to start: … (Tailscale.CLIError error 3.)" and exits non-zero.
   A Finder-launched app has none of those variables, and `Process.start` passes them through.
   A `~/.local/bin/tailscale` wrapper that `exec`s the bundle binary fails the same way.
-- Response: give the CLI process `TERM=dumb` in its environment. Verify by launching the app from
-  Finder, never from a terminal (a terminal launch hides the bug).
+- Response: `_run` passes `tailscaleCliEnvironment(Platform.environment)`, which adds `TERM=dumb`
+  when `TERM` is missing or empty and keeps a terminal's own `TERM`. Any new CLI call must go
+  through `_run`. Verify by launching the app from Finder, never only from a terminal (a terminal
+  launch hides the bug).
 - Rejected alternative: Tailscale's LocalAPI over `127.0.0.1:<ipnport>` with the token files under
   `/Library/Tailscale` (PR #19); unofficial and macOS-variant specific.
 
