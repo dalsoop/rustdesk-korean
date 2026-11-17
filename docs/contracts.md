@@ -1,0 +1,56 @@
+This file is written in English only.
+
+# Contracts
+
+Consumers: the owner's machine-setup scripts, the office server's infrastructure repo, the apps'
+own update check, and people downloading from the Releases page.
+
+## Release assets (GitHub `dalsoop/rustdesk-korean`, tag `1.5.0-ko.N`)
+
+| Asset | Content | Consumer expectation |
+|---|---|---|
+| `rustdesk-1.5.0-ko.N-macos-aarch64.zip` | `RustDesk.app` (main app), notarized, stapled | unzip with `ditto -x -k`; top-level entry is exactly `RustDesk.app` |
+| `rustdesk-public-1.5.0-ko.N-macos-aarch64.zip` | ranode, notarized | top-level entry is exactly `RustDesk (forked ranode).app` (until ko.16 `RustDesk Public.app`) |
+| `rustdesk-1.5.0-ko.N-aarch64.apk` | Android arm64, pinned certificate | installs over any earlier fork APK |
+| `rustdesk-1.5.0-ko.N-x86_64.exe`, `rustdesk-1.5.0-ko.N-x86_64.msi` | Windows x64 from CI | exact names: the Windows updater downloads `rustdesk-<tag>-x86_64.{exe,msi}` |
+| `rustdesk-1.5.0-ko.N-x86_64.deb` | Linux x64 from CI | package version `1.5.0+koN` |
+| `<asset>.sha256` | `shasum -a 256` line for each asset | consumers compare and refuse a mismatch |
+
+Errors: a missing asset or wrong sha256 means the consumer must not install; asset names never
+change once published.
+
+## Update check
+
+- Input: `GET https://api.github.com/repos/dalsoop/rustdesk-korean/releases/latest`.
+- Processing: tag parsed as `<version>-ko.<N>`; newer when `(version, N)` > the build's
+  (`RUSTDESK_KO_RELEASE` from `flutter/pubspec.yaml`).
+- Output: Windows downloads `…/releases/download/<tag>/rustdesk-<tag>-x86_64.{exe,msi}`; other
+  platforms show `https://github.com/dalsoop/rustdesk-korean/releases/tag/<tag>`.
+- Errors: a tag that does not parse, a prerelease/draft, or a download URL outside this repo's
+  releases, or a `html_url` other than `…/releases/tag/<tag>` → no update offered.
+
+## Command-line options (run with `sudo` for the main app's root config)
+
+| Option | Values | Default | Effect |
+|---|---|---|---|
+| `enable-input-source-toggle` | Y/N | Y | controlled Mac switches input source on F18/Hangul/LANG1 |
+| `direct-server` | Y/N | N | main app: Y on the owner's Macs; ranode: pinned N (and `--option` refuses on ranode, see below) |
+| `whitelist` | CIDR list | empty | main app: `100.64.0.0/10` on the owner's Macs; ranode: pinned |
+
+Local setting (per user, Settings → General → Keyboard; not settable with `--option`):
+`enable-peer-hangul-key` (Y/N, default Y) — controlling side maps 한/영 to the peer OS's key.
+Android: `korean-toggle-key` holds the 한/영 button's pinned key (unset = auto).
+
+`--option` is accepted only from an installed app whose executable sits under
+`/Applications/<app name>.app`; ranode's bundle is `RustDesk (forked ranode).app`, not
+`RustDeskPublic.app`, so `--option` never applies to ranode.
+
+## URL schemes
+
+`rustdesk://` opens the main app, `rustdeskpublic://` opens ranode; both take upstream's
+`rustdesk://<id>` forms.
+
+## Ports
+
+TCP 21118 direct access and UDP 21119 LAN discovery (upstream defaults). Peers' on-prem cards in
+ranode assume 21118; a device listening elsewhere shows as "직접 접속 꺼짐".
