@@ -12,7 +12,16 @@ const String _kTailscaleAppBinary =
 // GUI apps get a minimal PATH, so a Homebrew CLI would not be found through it.
 const List<String> _kExtraBinaryDirs = ['/opt/homebrew/bin', '/usr/local/bin'];
 
-enum TailscaleState { notFound, stopped, needsLogin, needsApproval, running }
+// notFound: no Tailscale binary on this Mac. notResponding: the binary is
+// there but did not answer in time (for example while the app restarts).
+enum TailscaleState {
+  notFound,
+  notResponding,
+  stopped,
+  needsLogin,
+  needsApproval,
+  running
+}
 
 enum RustDeskReachability { checking, reachable, unreachable }
 
@@ -97,6 +106,8 @@ class TailscaleStatus {
 
   static const notFound =
       TailscaleStatus(state: TailscaleState.notFound, devices: []);
+  static const notResponding =
+      TailscaleStatus(state: TailscaleState.notResponding, devices: []);
 }
 
 class TailscaleSnapshot {
@@ -256,6 +267,9 @@ class Tailscale {
     return null;
   }
 
+  /// Null when the binary is missing, cannot start, fails or does not answer
+  /// within [timeout]. Never throws: a read that threw left the caller
+  /// waiting on a result that never came.
   static Future<_CommandResult?> _run(List<String> args, Duration timeout) async {
     final binary = findBinary();
     if (binary == null) return null;
@@ -265,15 +279,30 @@ class Tailscale {
     } catch (_) {
       return null;
     }
-    final stdout = process.stdout.transform(utf8.decoder).join();
-    process.stderr.drain<void>();
+    final stdout = process.stdout
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .join()
+        .catchError((_) => '');
+    process.stderr.drain<void>().catchError((_) {});
     try {
       final code = await process.exitCode.timeout(timeout);
       return _CommandResult(code, await stdout.timeout(timeout));
-    } on TimeoutException {
-      process.kill();
+    } catch (_) {
+      _stop(process);
       return null;
     }
+  }
+
+  /// SIGTERM, then SIGKILL a second later, so CLI processes stuck on an
+  /// unresponsive Tailscale app do not pile up across re-checks.
+  static void _stop(Process process) {
+    process.kill();
+    process.exitCode
+        .timeout(const Duration(seconds: 1), onTimeout: () {
+          process.kill(ProcessSignal.sigkill);
+          return -1;
+        })
+        .catchError((_) => -1);
   }
 
   static Future<List<TailscaleProfile>> listProfiles() async {
@@ -282,11 +311,13 @@ class Tailscale {
     return parseTailscaleProfiles(result.stdout);
   }
 
-  /// A binary that runs but prints no status object counts as stopped;
-  /// one that is missing or does not answer in time counts as not found.
+  /// A binary that runs but prints no status object counts as stopped; a
+  /// missing one as not found; one that does not answer in time as not
+  /// responding.
   static Future<TailscaleStatus> readStatus() async {
+    if (findBinary() == null) return TailscaleStatus.notFound;
     final result = await _run(['status', '--json'], kTailscaleCommandTimeout);
-    if (result == null) return TailscaleStatus.notFound;
+    if (result == null) return TailscaleStatus.notResponding;
     final status = parseTailscaleStatusJson(result.stdout);
     if (status.state == TailscaleState.notFound) {
       return const TailscaleStatus(state: TailscaleState.stopped, devices: []);
@@ -294,7 +325,22 @@ class Tailscale {
     return status;
   }
 
-  static Future<TailscaleSnapshot> read() async {
+  static Future<TailscaleSnapshot>? _reading;
+
+  /// One read at a time: callers that ask while a read is running (the
+  /// "Check again" button, the re-check timer, the window coming back to the
+  /// front) get that read's result instead of starting more CLI processes.
+  static Future<TailscaleSnapshot> read() {
+    final pending = _reading;
+    if (pending != null) return pending;
+    late final Future<TailscaleSnapshot> started;
+    started = _read().whenComplete(() {
+      if (identical(_reading, started)) _reading = null;
+    });
+    return _reading = started;
+  }
+
+  static Future<TailscaleSnapshot> _read() async {
     final results = await Future.wait([readStatus(), listProfiles()]);
     final status = results[0] as TailscaleStatus;
     return TailscaleSnapshot(
@@ -306,6 +352,9 @@ class Tailscale {
 
   static Future<bool> switchProfile(String profileId) async {
     final result = await _run(['switch', profileId], kTailscaleSwitchTimeout);
+    // A read started before or during the switch describes the old tailnet;
+    // the next read starts afresh.
+    _reading = null;
     return result != null && result.exitCode == 0;
   }
 

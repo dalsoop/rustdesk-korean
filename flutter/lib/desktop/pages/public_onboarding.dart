@@ -210,10 +210,8 @@ class PublicTailscaleGuide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // notFound also covers a CLI that did not answer in time.
-    final installed = Tailscale.findBinary() != null;
     final (IconData icon, String title, String tip) = switch (state) {
-      TailscaleState.notFound when installed => (
+      TailscaleState.notResponding => (
           Icons.sync_problem,
           'Tailscale is not responding',
           'public_ts_not_responding_tip'
@@ -246,7 +244,7 @@ class PublicTailscaleGuide extends StatelessWidget {
     };
     final canOpenApp = state == TailscaleState.stopped ||
         state == TailscaleState.needsLogin ||
-        (state == TailscaleState.notFound && installed);
+        state == TailscaleState.notResponding;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -271,7 +269,7 @@ class PublicTailscaleGuide extends StatelessWidget {
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: [
-                  if (state == TailscaleState.notFound && !installed)
+                  if (state == TailscaleState.notFound)
                     ElevatedButton(
                       onPressed: () =>
                           launchUrl(Uri.parse(_kTailscaleDownloadUrl)),

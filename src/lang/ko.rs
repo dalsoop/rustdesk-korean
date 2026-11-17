@@ -867,7 +867,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_internet_login_tip", "인터넷으로 접속하려면 로그인이 필요합니다. 로그인은 무료이며 Google 등의 계정으로 할 수 있습니다. 로그인한 뒤 상대가 알려 준 ID를 입력하세요."),
         ("public_config_input", "키보드로 원격 기기를 제어하려면 시스템 설정 → 개인정보 보호 및 보안 → 입력 모니터링에서 \"RustDesk (forked ranode)\"를 켜세요."),
         ("Tailscale is not responding", "Tailscale이 응답하지 않습니다"),
-        ("public_ts_not_responding_tip", "Tailscale이 설치되어 있지만 응답하지 않았습니다. Tailscale 앱을 열고 잠시 뒤에 다시 확인하세요."),
+        ("public_ts_not_responding_tip", "Tailscale이 설치되어 있지만 응답하지 않았습니다. 이 화면은 스스로 다시 확인하고, Tailscale이 응답하면 바로 넘어갑니다. 계속 이 화면이면 Tailscale 앱을 열어 보세요."),
         ("RustDesk installed, ready to connect", "RustDesk 있음 · 바로 접속"),
         ("No devices match", "검색 결과가 없습니다"),
         ("Search by name, IP or ID", "이름, IP, ID로 검색"),
