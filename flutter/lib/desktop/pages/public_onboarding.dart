@@ -174,7 +174,7 @@ class PublicAppLabel extends StatelessWidget {
 }
 
 /// Left pane card in place of the incoming ID and password board: how other
-/// tailnet devices reach this Mac. No ID and no one-time password are shown.
+/// tailnet devices reach this Mac. The ID is shown, the one-time password is not.
 class PublicIntroCard extends StatefulWidget {
   const PublicIntroCard({Key? key}) : super(key: key);
 
@@ -189,16 +189,19 @@ class _PublicIntroCardState extends State<PublicIntroCard> {
   void initState() {
     super.initState();
     Tailscale.latest.addListener(_onTailscaleRead);
+    gFFI.serverModel.addListener(_onTailscaleRead);
   }
 
   @override
   void dispose() {
     Tailscale.latest.removeListener(_onTailscaleRead);
+    gFFI.serverModel.removeListener(_onTailscaleRead);
     super.dispose();
   }
 
-  // No timer of its own: each finished Tailscale read rebuilds the card, and
-  // every build re-reads the password state a settings change may have altered.
+  // No timer of its own: each finished Tailscale read (and a fetched ID)
+  // rebuilds the card, and every build re-reads the password state a settings
+  // change may have altered.
   void _onTailscaleRead() {
     if (mounted) setState(() {});
   }
@@ -218,6 +221,22 @@ class _PublicIntroCardState extends State<PublicIntroCard> {
     final ip = snapshot != null && snapshot.state == TailscaleState.running
         ? snapshot.selfIpv4
         : null;
+    final id = gFFI.serverModel.serverId.text;
+    final hasId = id.isNotEmpty && id != translate('Generating ...');
+    Widget copyButton(String text) => Tooltip(
+          message: translate('Copy'),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: text));
+              showToast(translate('Copied'));
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: Icon(Icons.copy, size: 13, color: theme.hintColor),
+            ),
+          ),
+        );
     return Padding(
       padding: const EdgeInsets.only(left: 20, right: 16, top: 16, bottom: 5),
       child: Column(
@@ -229,6 +248,16 @@ class _PublicIntroCardState extends State<PublicIntroCard> {
           Text(translate('public_incoming_tip'),
               style: theme.textTheme.bodySmall),
           const SizedBox(height: 10),
+          if (hasId)
+            Row(
+              children: [
+                Flexible(
+                  child: Text('${translate('ID')}: $id', style: line),
+                ),
+                copyButton(id),
+              ],
+            ),
+          if (hasId) const SizedBox(height: 6),
           if (ip != null)
             Row(
               children: [
@@ -236,21 +265,7 @@ class _PublicIntroCardState extends State<PublicIntroCard> {
                   child: Text(translate('public_incoming_address_{$ip}'),
                       style: line),
                 ),
-                Tooltip(
-                  message: translate('Copy'),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(4),
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: ip));
-                      showToast(translate('Copied'));
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(3),
-                      child:
-                          Icon(Icons.copy, size: 13, color: theme.hintColor),
-                    ),
-                  ),
-                ),
+                copyButton(ip),
               ],
             )
           else
