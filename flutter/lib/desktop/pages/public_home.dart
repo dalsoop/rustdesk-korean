@@ -25,7 +25,8 @@ const double _kStatusBarHeight = 42;
 // user has installed, turned on or signed in to it.
 const Duration _kSetupPollInterval = Duration(seconds: 5);
 // A Tailscale that does not answer (for example while its app restarts) is
-// re-checked after 5, 10, 20, then every 30 seconds until it answers.
+// re-checked at least 5, 10, 20, then 30 seconds after the last read ended
+// (on the next 5-second tick), until it answers.
 const Duration _kNoAnswerMaxInterval = Duration(seconds: 30);
 
 enum _RustDeskState { checking, reachable, directOff, missing, unreachable }
@@ -97,8 +98,8 @@ class _PublicHomePageState extends State<PublicHomePage>
     super.dispose();
   }
 
-  // Coming back to the window re-checks at once instead of waiting for the
-  // next timer step.
+  // Coming back to the app (from Tailscale or any other app) re-checks at
+  // once instead of waiting for the next timer step.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);

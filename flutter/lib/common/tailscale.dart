@@ -318,7 +318,13 @@ class Tailscale {
     if (findBinary() == null) return TailscaleStatus.notFound;
     final result = await _run(['status', '--json'], kTailscaleCommandTimeout);
     if (result == null) return TailscaleStatus.notResponding;
-    final status = parseTailscaleStatusJson(result.stdout);
+    TailscaleStatus status;
+    try {
+      status = parseTailscaleStatusJson(result.stdout);
+    } catch (_) {
+      // It answered, with output this app cannot read: not "not responding".
+      status = TailscaleStatus.notFound;
+    }
     if (status.state == TailscaleState.notFound) {
       return const TailscaleStatus(state: TailscaleState.stopped, devices: []);
     }
