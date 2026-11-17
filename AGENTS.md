@@ -1,3 +1,87 @@
+This file is written in English only.
+
+# RustDesk Korean fork (dalsoop/rustdesk-korean)
+
+A personal fork of upstream RustDesk 1.5.0 for the owner's own devices: Korean input and the
+한/영 key across macOS, Windows, Linux and Android, plus two macOS apps built from one tree —
+the main app "RustDesk (for korean)" (accepts incoming connections) and the second app
+"RustDesk (forked ranode)" (outgoing; on-prem tab over Tailscale and internet tab over the public
+RustDesk server). Users: the owner's Macs, the office Linux server, the owner's Android phone.
+Releases are public GitHub prereleases/releases, but nobody outside those devices is a target.
+Nothing goes back upstream; upstream changes are merged in. Everything below this fork section,
+from "# RustDesk Guide" on, is upstream's guide and stays byte-identical to upstream.
+
+## Project structure (fork-owned parts)
+
+```
+rustdesk-korean/
+├── CLAUDE.md                      → imports AGENTS.md (one line, upstream's)
+├── AGENTS.md                      → this fork block, then upstream's guide unchanged
+├── KOREAN.md                      → Korean user guide and release notes (stays Korean)
+├── README.md                      → upstream README with a Korean fork section on top
+├── build.py / build.rs            → flavor switch (RUSTDESK_FLAVOR), ko release number, macOS branding
+├── res/
+│   ├── osx-sign-notarize.sh       → macOS sign + notarize + zip (signing Mac only)
+│   └── android-sign-release.sh    → Android APK signing with the pinned certificate
+├── .github/workflows/
+│   ├── build-desktop-ko.yml       → Windows/Linux x64 builds on push to the default branch
+│   ├── flutter-unit-test.yml      → 3 Korean-input Flutter tests on push
+│   ├── build-android-arm64.yml    → obsolete (old branch trigger), not the release path
+│   └── sign-apk.yml               → obsolete, throwaway keystore: never run
+├── docs/
+│   ├── architecture.md            → fork components, the two apps, data flows
+│   ├── business-rules.md          → Korean key rules, app identities, incoming policy, versions
+│   ├── security-policy.md         → incoming policy, signing keys, secrets (SECURITY.md is upstream's)
+│   ├── standards.md               → hard rules: minimal diff, versioning, verification
+│   ├── engineering-notes.md       → traps (Tailscale CLI from a GUI app, macOS shortcuts, …)
+│   ├── operations.md              → build, verify, release, install
+│   ├── contracts.md               → release assets, update check, options, URL schemes
+│   └── tracking/
+│       ├── status.md              → what is released, what is next
+│       ├── decisions/index.md     → decision records (NNNN-*.md)
+│       └── findings.md            → unresolved problems
+├── src/AGENTS.md                  → fork Rust modules (keys, flavor, updater, macOS input source)
+└── flutter/AGENTS.md              → fork Flutter parts (ranode home, Tailscale, Korean soft keyboard)
+```
+
+## Hard rules
+
+- Upstream code is given: change it only through thin, additive hooks; fork logic lives in
+  fork-owned files (`src/hangul_key.rs`, `src/public_flavor.rs`, `src/fork_update.rs`,
+  `src/platform/macos_input_source.rs`, `flutter/lib/common/tailscale*.dart`,
+  `flutter/lib/desktop/pages/public_*.dart`, …). Never reformat or refactor upstream lines.
+- The release number changes only in the `version:` line of `flutter/pubspec.yaml`
+  (`1.5.0+<68*100+N>`); the protocol version `1.5.0` in `Cargo.toml` never changes.
+- Bundle ids, app names and URL schemes of the two macOS apps never change
+  (`com.carriez.rustdesk` / `RustDesk` / `rustdesk`; `net.ranode.rustdesk-public` /
+  `RustDeskPublic` / `rustdeskpublic`): macOS permissions, settings and the service hang on them.
+- Incoming connections to the owner's devices are accepted only from the Tailscale range
+  100.64.0.0/10. No change may open a device to the internet.
+- Signing keys are the owner's personal assets: never copy them into CI, a company store or the repo.
+
+## Before you work
+
+- Always: `docs/standards.md`, `docs/engineering-notes.md`, the `AGENTS.md` of the directory you edit.
+- Before touching key handling (`src/hangul_key.rs`, `src/keyboard.rs`, macOS input source,
+  Android soft keyboard): the 한/영 tables in `docs/business-rules.md`.
+- Before touching the ranode app, its Tailscale code or incoming/outgoing behaviour:
+  `docs/security-policy.md` and the Tailscale entries in `docs/engineering-notes.md`.
+- Before a release or a version bump: `docs/operations.md` (release) and `docs/contracts.md`
+  (asset names, update check).
+- Before an upstream sync: the upstream-sync checklist in `docs/engineering-notes.md`.
+
+## Report to the owner at once
+
+- Anything that lets a non-Tailscale address connect in, or turns on the direct port outside the
+  Tailscale range.
+- A build whose Android signing certificate differs from the pinned one, or a macOS build that is
+  not "Notarized Developer ID".
+- A signing key or secret printed, committed, or found in a company store.
+- A change that alters a bundle id, app name or URL scheme.
+
+Everything else unresolved goes to `docs/tracking/findings.md`.
+
+
 # RustDesk Guide
 
 ## Project Layout
