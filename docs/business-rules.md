@@ -72,14 +72,25 @@ Option `enable-input-source-toggle`, default **on** (turned off only with
   owner's Macs, after which ranode alone receives. Only one app can listen on 21118 at a time; a
   ranode started while the main app holds 21118 connects out normally and starts receiving only
   after it is started again with the port free.
-- ranode settings that the user cannot change: `direct-server=Y`, whitelist `100.64.0.0/10`,
-  `verification-method=use-permanent-password` (the one-time password is never accepted; a click
-  to accept on the Mac still works).
-- ranode's left pane "이 Mac에 접속받기" shows this Mac's Tailscale IPv4 (from the latest Tailscale
-  read; "Tailscale이 켜져 있어야 접속받을 수 있습니다" when Tailscale is not running), whether a
-  permanent password is set with upstream's "영구 비밀번호 설정" (`Set permanent password`) button, and "지금은 접속받지 않음 (서비스 중지됨)"
-  when `stop-service` is `Y`. It never shows a RustDesk ID or one-time password. A busy port is not
-  shown.
+- ranode settings that the user cannot change (the floor): `direct-server=Y`,
+  `verification-method=use-permanent-password` (the one-time password is never accepted),
+  `allow-remote-config-modification=N`, and a whitelist that starts with `100.64.0.0/10`.
+- Per-Mac incoming policy (from ko.24), set only with `--set-incoming-policy` while ranode is quit
+  and read once at ranode's start: extra private IPv4 subnets appended to the whitelist (the office
+  subnet on the company Craft Macs; none on the owner's own Macs), and approve mode `password`
+  (no click to accept; Craft Macs) or `both` / unset (upstream default: click to accept works and
+  stays changeable in ranode's settings). Unset = ko.23 behaviour. An invalid stored entry is
+  skipped; the floor always holds.
+- ID connections (from ko.24): ranode is reached by its RustDesk ID through the public server
+  (decision 0007); the whitelist checks the peer's own address, so an ID connection succeeds only
+  where the path is direct from an allowed network (inside the office on a Craft Mac). A relayed
+  peer arrives with its public address and is refused. Outside the office only the Tailscale IP works.
+- ranode's left pane "이 Mac에 접속받기" shows this Mac's RustDesk ID with a copy button (from ko.24;
+  only once the ID is known, never "Generating ..."), its Tailscale IPv4 (from the latest Tailscale
+  read; "Tailscale이 꺼져 있어 Tailscale 주소로는 접속받을 수 없습니다" when Tailscale is not running),
+  whether a permanent password is set with upstream's "영구 비밀번호 설정" (`Set permanent password`)
+  button, and "지금은 접속받지 않음 (서비스 중지됨)" when `stop-service` is `Y`. It never shows the
+  one-time password. A busy port is not shown.
 - When ranode on a Mac is closed, other Macs' on-prem tabs show that Mac as "RustDesk 없음".
 - ranode's first launch clears, once, the own-server settings (custom rendezvous, relay, API
   server, key) and every peer, favourite and remembered remote id containing `@rustdesk.internal.kr`.

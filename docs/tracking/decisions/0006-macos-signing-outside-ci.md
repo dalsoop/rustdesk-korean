@@ -16,3 +16,10 @@ enter CI. PR #19 and its workflow are dropped.
 
 ## Consequences
 - Each release needs a reachable signing Mac with the keys.
+
+## Addendum (2026-11-17, ko.24)
+From ko.23 macOS builds may ship as internal builds, made on the company build Mac by the
+machine-setup `ranode-build` script and signed with the one stable self-signed identity "ranode
+internal signing" (vault + build Mac keychain; never the repo or CI, never ad-hoc, because macOS
+ties privacy grants to the signing identity). The notarized Developer ID release on the owner's
+Mac stays optional and later; the owner's personal keys still never leave that Mac.

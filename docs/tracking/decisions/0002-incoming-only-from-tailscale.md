@@ -17,3 +17,11 @@ the whitelist in code so its users cannot widen it.
 - No feature may open a device to a non-Tailscale address.
 - A device without Tailscale can connect out (ranode internet tab) but can never be reached.
 - ranode's incoming (ko.23) needs no RustDesk ID: peers connect by Tailscale IP.
+
+## Addendum (2026-11-17, ko.24)
+On the company Craft Macs the whitelist also includes the office subnet and approve mode is
+password-only, as the owner decided for the main app there (the machine-setup repo's decision 0006
+on unattended RustDesk on the Craft Macs). The owner's own Macs stay Tailscale only. The fork
+enforces the floor (`100.64.0.0/10` first, permanent password only, never a public address); the
+per-Mac part comes from the machine setup through `--set-incoming-policy`. ranode's incoming now
+also works by RustDesk ID, from allowed networks only.

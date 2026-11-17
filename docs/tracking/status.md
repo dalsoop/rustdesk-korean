@@ -20,8 +20,13 @@ This file is written in English only.
   the Dock or at login (`TERM=dumb` for the CLI).
 - ko.23 (version `1.5.0+6823`, merged): ranode also accepts incoming connections from the tailnet
   with its permanent password only; left pane "이 Mac에 접속받기"; `--set-permanent-password`.
-  Built: Rust compiled in the Windows/Linux CI build; Flutter tests green in CI; the Rust unit
-  tests (`public_flavor`) are compiled and run first on the owner's release Mac.
+- ko.24 (version `1.5.0+6824`, merged): ranode accepts ID connections like the main app (per-Mac
+  whitelist and approve mode via `--set-incoming-policy`, floor adds
+  `allow-remote-config-modification=N`); the left pane shows the ID.
+- ko.23 and ko.24 ship as internal builds (operations, internal builds), signed with the stable
+  "ranode internal signing" identity; a Developer ID release is optional and later. Rust compiled
+  in the Windows/Linux CI build; Flutter tests green in CI. CI's Rust test workflow is disabled, so
+  the `public_flavor` unit tests of ko.23 and ko.24 have never run.
 
 ## Remaining, in order
 
@@ -29,12 +34,14 @@ This file is written in English only.
    (`version: 1.5.0+6822`) on the owner's release Mac, the same way as ko.21. Before marking it
    Latest, launch the signed ranode from Finder with Tailscale up (device list appears), stopped,
    restarting and absent (each shows its own state), and once from a terminal (unchanged). Mark
-   Latest only after that check passes.
-2. **ko.23 release (handed to the owner)**: on the owner's release Mac, from the merge commit of
-   the ko.23 PR (`version: 1.5.0+6823`): run `cargo test --lib public_flavor` (must pass; first
-   time these tests compile), build both macOS apps, sign, then on the signed ranode check:
+   Latest only after that check passes. Optional once ko.24 is installed internally.
+2. **ko.24 internal build (machine-setup cycle)**, on the company build Mac from the ko.24 merge
+   commit: first `cargo test --lib public_flavor` (must pass; first run of the ko.23 and ko.24
+   tests), then `ranode-build` signed with the stable internal identity (`codesign -dv` shows it,
+   never ad-hoc). ko.23 is not built separately: ko.24 contains it.
+3. **ko.23 live checks, on that internal build, before the cutover**:
    1. another tailnet Mac connects by this Mac's Tailscale IP + permanent password and controls it;
-   2. a connection through the public server (non-Tailscale address) is refused;
+   2. a connection relayed through the public server (non-allowed address) is refused;
    3. with the main app running, ranode works outgoing and does not take 21118;
    4. after quitting the main app and relaunching ranode, ranode accepts;
    5. the left pane shows the address and password status; missing Screen Recording /
@@ -43,14 +50,18 @@ This file is written in English only.
    6. `--set-permanent-password` with the password on stdin sets it (exit 0), exits non-zero with
       ranode quit, and is refused under sudo;
    7. a one-time password is refused; the permanent password works.
-   Mark Latest only after all pass. Release ko.22 first (or fold it in: ko.23 contains it).
-3. **Machine-setup cutover (after ko.23 is released)**, for each owner Mac: install ko.23 ranode;
-   grant it Screen Recording, Accessibility and Input Monitoring; quit and remove the main app
-   (and its LaunchAgent/LaunchDaemon where installed) before (re)starting ranode, because ranode retakes a busy 21118 only at its next start; start
-   ranode and add it as a login item; set the vault password with `--set-permanent-password`
-   (stdin, as the user, ranode running); verify from another tailnet Mac.
-4. Removal of the main app from the owner's Macs and the switch of their setup (permissions,
-   options, password) to ranode — done in the machine-setup repo after ko.23.
+4. **Machine-setup cutover**, per Mac: install the internal build, grant Screen Recording,
+   Accessibility and Input Monitoring, run the cutover (operations), add ranode as a login item.
+   The main app is removed from every Mac — done in the machine-setup repo.
+5. **ko.24 live checks, on that internal build, after the cutover** (operations, "Cutover keeping
+   the Mac's ID"):
+   1. Craft Mac: by the kept ID from inside the office, password only, no click offered; by
+      Tailscale IP;
+   2. Craft Mac: by ID from outside the office → refused;
+   3. own Mac: Tailscale IP works and click-accept is offered;
+   4. the card shows the ID; `--set-incoming-policy` prints the expected line, exits 2 with ranode
+      running and 1 for a public subnet;
+   5. after a rebuild signed with the stable identity, the macOS grants are still on.
 
 ## Blockers
 

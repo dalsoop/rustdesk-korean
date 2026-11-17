@@ -5,7 +5,10 @@ This file is written in English only.
 ## Scope
 ranode UI: `lib/desktop/pages/public_home.dart` (tabs, on-prem sections, cards, left pane),
 `public_onboarding.dart` (first-run guide; `PublicIntroCard` is the left pane's "이 Mac에 접속받기"
-card: own Tailscale IPv4 from `Tailscale.latest`, password status and dialog, stopped-service line), `lib/common/tailscale.dart` (CLI runner, states,
+card: this Mac's RustDesk ID with a copy button, shown only when `gFFI.serverModel.serverId.text`
+is non-empty and not `translate('Generating ...')`, the card listening to `gFFI.serverModel`;
+own Tailscale IPv4 from `Tailscale.latest`; password status and dialog; stopped-service line; never
+the one-time password), `lib/common/tailscale.dart` (CLI runner, states,
 reachability), `public_onprem.dart` (recents/favourites records), `public_login.dart`,
 `tailscale_range.dart` (no `dart:io`, compiled for web too). Korean input:
 `lib/models/soft_keyboard_input_utils.dart`, `hangul_dubeolsik.dart`, `korean_toggle_key.dart`,

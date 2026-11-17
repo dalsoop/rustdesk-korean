@@ -4,7 +4,7 @@ This file is written in English only.
 
 ## Scope
 Fork modules (registered in `lib.rs` and `platform/mod.rs`): `hangul_key.rs` (peer 한/영 mapping), `public_flavor.rs` (ranode identity, pinned
-options, cleanup, discovery probe), `fork_update.rs` (fork release check; std-only because
+options and per-Mac incoming policy, ranode CLI commands, cleanup, discovery probe), `fork_update.rs` (fork release check; std-only because
 `build.rs` includes it), `platform/macos_input_source.rs` and the fork parts of `platform/macos.mm`
 (TIS switch, HID shortcut post, local hotkey pause, Fn flag fix). Hooks in upstream files:
 `keyboard.rs`, `server/input_service.rs`, `updater.rs`, `common.rs` (`is_rustdesk`,
@@ -22,10 +22,18 @@ Not this module's scope: upstream's protocol, codecs, server services, `libs/hbb
 - `public_flavor::init()` runs before anything reads config; it sets `APP_NAME = RustDeskPublic`
   and the overrides. A main-app build never enters it (`is_public()` is a compile-time false).
 - `override_settings()` holds every ranode setting the user must not change (`direct-server=Y`,
-  whitelist `100.64.0.0/10`, `use-permanent-password`); overrides are not saved and win over saved
-  values.
-- `handle_cli` handles only `--set-permanent-password` in ranode: the password comes from stdin,
-  never argv; root is refused; exit 0 / 1 (refused input) / 2 (ranode did not apply it).
+  `use-permanent-password`, `allow-remote-config-modification=N`, whitelist `100.64.0.0/10`
+  first), plus the per-Mac policy read once at start from the local options
+  `public-incoming-extra-subnets` (appended to the whitelist) and `public-incoming-approve-mode`
+  (`password` → `approve-mode=password`; otherwise no override). `build_overrides` skips any stored
+  entry that is not a private IPv4 network, so a hand-edited value never weakens the floor.
+  Overrides are not saved and win over saved values.
+- `handle_cli` handles `--set-permanent-password` and `--set-incoming-policy` in ranode only.
+  Password: from stdin, never argv; root refused; exit 0 / 1 (refused input) / 2 (ranode did not
+  apply it). Policy: `--extra-subnets <list>|none`, `--approve-mode password|both`, each at most
+  once; at most `MAX_EXTRA_SUBNETS` (8) entries inside 10/8, 172.16/12, 192.168/16 without host
+  bits; all-or-nothing save; root refused; exit 0 / 1 (refused input or root) / 2 (ranode running,
+  its IPC answers); prints one `whitelist=… approve-mode=…` line.
 - `cleanup_once()` touches only own-server keys and ids containing `@rustdesk.internal.kr`, once.
 - `probe_rustdesk` accepts a pong only from the probed IP and never blocks past its timeout.
 - `fork_update::is_newer_release` compares `(version, ko)` tuples; a non-fork tag is `None`, never
@@ -44,7 +52,8 @@ Not this module's scope: upstream's protocol, codecs, server services, `libs/hbb
 - `hangul_key` (26 tests): every OS pair in the mapping table, exact-match shortcut rule, modifier
   release/re-press, hold-once.
 - `macos_input_source`, `platform::macos` hotkey-flag and agent-plist tests run only on macOS.
-- `public_flavor`: overrides pinned to `N` and `100.64.0.0/10`; internal-id detection; pong origin.
+- `public_flavor`: the floor incl. `allow-remote-config-modification=N`; subnet validation;
+  policy flag parsing; overrides from stored values; internal-id detection; pong origin.
 - `fork_update`/`updater`: tag parsing, newer-than, URLs limited to this repo's releases.
 - Edge cases to cover when changing: Mac with no Korean input source; shortcut turned off; legacy
   keyboard mode; tag with an upstream version change.
