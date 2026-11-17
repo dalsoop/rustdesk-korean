@@ -69,6 +69,11 @@ first `.app` away before the second build overwrites the Release folder.
 
 ## Release ko.N
 
+Releases are made by the owner on the owner's release Mac (the Mac that holds `~/work/sdk` and the
+signing keys); agents on the company machines cannot reach it and do not release. An agent hands
+over: the merge commit on `feat/sync-upstream-1.5.0`, the version line, and the live checks to run
+on the signed build before marking the release Latest.
+
 1. Merge the PR that sets `version: 1.5.0+68NN` in `flutter/pubspec.yaml` (and the KOREAN.md notes)
    into `feat/sync-upstream-1.5.0`. CI then builds Windows/Linux artifacts.
 2. Build both macOS apps from that commit on the build Mac; move them to the signing Mac.

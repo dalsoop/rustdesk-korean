@@ -21,10 +21,11 @@ This file is written in English only.
 
 ## Remaining, in order
 
-1. **ko.22 release**: merge the Finder fix PR, close PR #19, build both macOS apps, live check of
-   ranode on a signed build (from Finder with Tailscale up, stopped, restarting and absent; once
-   from a terminal), then sign and release. Mark the release Latest only after that live check
-   passes. Built and signed the same way as ko.21, on the owner's release Mac.
+1. **ko.22 release (handed to the owner)**: build, sign and release the merge commit of PR #35
+   (`version: 1.5.0+6822`) on the owner's release Mac, the same way as ko.21. Before marking it
+   Latest, launch the signed ranode from Finder with Tailscale up (device list appears), stopped,
+   restarting and absent (each shows its own state), and once from a terminal (unchanged). Mark
+   Latest only after that check passes.
 2. **ko.23**: ranode also accepts incoming connections (Tailscale range only, direct port 21118, no
    RustDesk ID, no service, same permanent password), taking over port 21118 once the main app is
    gone; its left pane stops saying "접속하는 쪽 전용".
