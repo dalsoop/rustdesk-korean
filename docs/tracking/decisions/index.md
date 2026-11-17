@@ -10,3 +10,5 @@ This file is written in English only.
 | 0004 | Keep upstream's AGENTS.md byte for byte under a fork block | 2026-11-17 |
 | 0005 | KOREAN.md and README's Korean section stay Korean | 2026-11-17 |
 | 0006 | macOS releases are signed on the owner's Mac, not in CI | 2026-11-17 |
+| 0007 | ranode stays registered with the public server while it accepts incoming | 2026-11-17 |
+| 0008 | ranode accepts only its permanent password | 2026-11-17 |

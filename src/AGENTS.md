@@ -21,8 +21,11 @@ Not this module's scope: upstream's protocol, codecs, server services, `libs/hbb
 ## Invariants
 - `public_flavor::init()` runs before anything reads config; it sets `APP_NAME = RustDeskPublic`
   and the overrides. A main-app build never enters it (`is_public()` is a compile-time false).
-- `override_settings()` holds every ranode setting the user must not change; overrides are not
-  saved and win over saved values.
+- `override_settings()` holds every ranode setting the user must not change (`direct-server=Y`,
+  whitelist `100.64.0.0/10`, `use-permanent-password`); overrides are not saved and win over saved
+  values.
+- `handle_cli` handles only `--set-permanent-password` in ranode: the password comes from stdin,
+  never argv; root is refused; exit 0 / 1 (refused input) / 2 (ranode did not apply it).
 - `cleanup_once()` touches only own-server keys and ids containing `@rustdesk.internal.kr`, once.
 - `probe_rustdesk` accepts a pong only from the probed IP and never blocks past its timeout.
 - `fork_update::is_newer_release` compares `(version, ko)` tuples; a non-fork tag is `None`, never

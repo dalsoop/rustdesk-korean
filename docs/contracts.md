@@ -34,7 +34,8 @@ change once published.
 | Option | Values | Default | Effect |
 |---|---|---|---|
 | `enable-input-source-toggle` | Y/N | Y | controlled Mac switches input source on F18/Hangul/LANG1 |
-| `direct-server` | Y/N | N | main app: Y on the owner's Macs; ranode: pinned N (and `--option` refuses on ranode, see below) |
+| `direct-server` | Y/N | N | main app: Y on the owner's Macs; ranode: pinned Y from ko.23 (N before), and `--option` refuses on ranode (see below) |
+| `verification-method` | `use-temporary-password` / `use-permanent-password` / both | both | ranode: pinned `use-permanent-password` from ko.23 |
 | `whitelist` | CIDR list | empty | main app: `100.64.0.0/10` on the owner's Macs; ranode: pinned |
 
 Local setting (per user, Settings → General → Keyboard; not settable with `--option`):
@@ -45,6 +46,14 @@ Android: `korean-toggle-key` holds the 한/영 button's pinned key (unset = auto
 `/Applications/<app name>.app`; ranode's bundle is `RustDesk (forked ranode).app`, not
 `RustDeskPublic.app`, so `--option` never applies to ranode.
 
+## ranode password command (from ko.23)
+
+- Call: `"/Applications/RustDesk (forked ranode).app/Contents/MacOS/RustDeskPublic" --set-permanent-password`,
+  run as the logged-in user while ranode is running; the password is the first line of stdin.
+- Output: `Done!` and exit 0 when ranode applied it.
+- Errors: exit 1 for a password given as an argument, an empty password, or running as root; exit 2
+  when ranode is not running or did not apply it. The password is never printed.
+
 ## URL schemes
 
 `rustdesk://` opens the main app, `rustdeskpublic://` opens ranode; both take upstream's
@@ -53,4 +62,5 @@ Android: `korean-toggle-key` holds the 한/영 button's pinned key (unset = auto
 ## Ports
 
 TCP 21118 direct access and UDP 21119 LAN discovery (upstream defaults). Peers' on-prem cards in
-ranode assume 21118; a device listening elsewhere shows as "직접 접속 꺼짐".
+ranode assume 21118; a device listening elsewhere shows as "직접 접속 꺼짐". ranode does not answer
+UDP 21119, so a Mac whose only RustDesk is a closed ranode shows as "RustDesk 없음".

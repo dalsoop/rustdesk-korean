@@ -16,4 +16,4 @@ the whitelist in code so its users cannot widen it.
 ## Consequences
 - No feature may open a device to a non-Tailscale address.
 - A device without Tailscale can connect out (ranode internet tab) but can never be reached.
-- ranode's incoming (ko.22) needs no RustDesk ID: peers connect by Tailscale IP.
+- ranode's incoming (ko.23) needs no RustDesk ID: peers connect by Tailscale IP.

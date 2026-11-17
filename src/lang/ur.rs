@@ -881,6 +881,14 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_no_tailscale_hint", ""),
         ("public_server_login_tip", ""),
         ("public_login_required_tip", ""),
+        ("Receive connections on this Mac", ""),
+        ("public_incoming_address_{}", ""),
+        ("public_incoming_needs_tailscale", ""),
+        ("public_password_set", ""),
+        ("public_password_not_set", ""),
+        ("public_incoming_stopped", ""),
+        ("public_config_screen", ""),
+        ("public_config_acc", ""),
     ].iter().cloned().collect();
 }
 

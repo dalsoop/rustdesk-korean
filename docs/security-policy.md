@@ -18,7 +18,7 @@ This file is written in English only.
 |---|---|---|---|
 | A device inside the owner's tailnet (source in 100.64.0.0/10) | Connect to the main app on an owner's Mac | Direct port 21118 is on (`direct-server=Y`) and whitelist is `100.64.0.0/10`, both set with `sudo RustDesk --option` on that Mac; or through the owner's own RustDesk server, reachable only inside Tailscale; then the permanent password | — |
 | Any address outside 100.64.0.0/10 (internet, LAN, public relay) | Connect in | never | the whitelist refuses any connection whose source address is outside the range |
-| Anyone | Connect in to ranode | never today: ranode pins `direct-server=N` and the whitelist in code (`OVERWRITE_SETTINGS`), which saved settings cannot override | changing these through the UI, config files or `--option` |
+| A device inside the owner's tailnet | Connect in to ranode (from ko.23) | ranode is running in the logged-in session, its source is in 100.64.0.0/10, and it gives ranode's permanent password (or someone at the Mac clicks accept); `direct-server=Y`, the whitelist and `use-permanent-password` are pinned in code (`OVERWRITE_SETTINGS`), which saved settings cannot override | the one-time password; changing the pinned settings through the UI, config files or `--option` |
 | Someone without Tailscale | Reach an owner's device | only by being invited into the tailnet | opening a port or a public-server path for them |
 
 - The office Linux server gets `direct-server=Y` from its own infrastructure repo, not from this fork.
@@ -32,6 +32,9 @@ This file is written in English only.
 2. The peer sends the permanent password; a wrong one is refused and counted by upstream's
    attempt limiter. The fork adds no lockout, approval click or second factor of its own.
 3. Accepted sessions show upstream's connection window on the Mac; the fork keeps no extra log.
+
+- ranode stays registered with the public RustDesk server (it was before ko.23); that path cannot
+  get in because the whitelist checks the connecting address on every path.
 
 ## Outgoing
 
@@ -47,7 +50,7 @@ This file is written in English only.
 | Developer ID Application key + cert | owner (personal) | SOPS file `secrets/macbook-tools/developer-id-application.enc.yaml` in the SOPS repo `principal-secrets-mono`, decrypted with an age key on the signing Mac | `res/osx-sign-notarize.sh` only, into a 0700 temp folder removed on exit | printed, committed, put in GitHub/GitLab CI secrets |
 | App Store Connect API key (p8, key id, issuer) | owner (personal) | same SOPS repo, `app-store-connect-api-key.enc.yaml` | `xcrun notarytool` in the same script | same |
 | Android signing key | owner (personal) | Bitwarden Secrets Manager project `android-signing`, read through `bwsx` into the signing script's environment only | `res/android-sign-release.sh` on the signing Mac | given to CI runners; the CI APK is unsigned |
-| Each Mac's permanent RustDesk password | owner | the main app's config on that Mac | incoming authentication | committed or logged |
+| Each Mac's permanent RustDesk password | owner | the main app's config on that Mac; for ranode, ranode's own config, set by the user in its dialog or by `RustDeskPublic --set-permanent-password` reading stdin as the logged-in user | incoming authentication | passed on the command line, committed or logged |
 
 - Rotation: the Android key cannot rotate without breaking updates (every device would have to
   uninstall first); the signing script refuses a certificate other than the pinned SHA-256 unless
