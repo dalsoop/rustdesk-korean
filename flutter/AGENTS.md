@@ -26,7 +26,8 @@ Not this module's scope: upstream pages beyond thin `bind.mainIsPublicFlavor()` 
   after 1 s), and decodes output leniently; `Tailscale.read()` shares one in-flight read.
 - The CLI is located by `findBinary()` only (app bundle, `PATH`, `/opt/homebrew/bin`,
   `/usr/local/bin`). A Finder-launched app has no shell environment, and the Tailscale app binary
-  then refuses to act as a CLI; `_run` does not yet set one (planned: `TERM=dumb`, ko.21).
+  then refuses to act as a CLI; `_run` therefore starts every CLI with
+  `tailscaleCliEnvironment(...)` (`TERM=dumb` added only when `TERM` is missing or empty).
 - `notFound` means no binary; `notResponding` means a binary that did not answer in time; neither
   is reported as "stopped".
 - The page's loading flag is cleared on every path of a refresh.
@@ -38,6 +39,7 @@ Not this module's scope: upstream pages beyond thin `bind.mainIsPublicFlavor()` 
 ## Tests
 - `test/tailscale_test.dart`, `test/public_onprem_test.dart`: state parsing, records, public API
   server detection. Add a case for each new Tailscale state or CLI argument/environment change.
+  Both files run in CI with the soft-keyboard tests.
 - `test/soft_keyboard_input_utils_test.dart`, `hangul_dubeolsik_test.dart`,
   `korean_toggle_key_test.dart`: composition diffs, 두벌식 mapping, auto key per OS.
 - Live check for ranode changes: launch from Finder with Tailscale up, stopped, restarting, absent.

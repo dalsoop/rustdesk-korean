@@ -126,4 +126,20 @@ e4e8  urit245@gmail.com       urit245@gmail.com*
     expect(nas.tags, ['tag:server']);
     expect(nas.lastSeen, DateTime.utc(2026, 11, 7, 10));
   });
+
+  test('CLI environment without TERM gets TERM=dumb and keeps the rest', () {
+    final env = tailscaleCliEnvironment({'PATH': '/usr/bin:/bin'});
+    expect(env['TERM'], 'dumb');
+    expect(env['PATH'], '/usr/bin:/bin');
+  });
+
+  test('CLI environment with a TERM is passed unchanged', () {
+    const inherited = {'TERM': 'xterm-256color', 'PATH': '/usr/bin'};
+    expect(tailscaleCliEnvironment(inherited), inherited);
+  });
+
+  test('CLI environment with an empty TERM gets TERM=dumb', () {
+    final env = tailscaleCliEnvironment({'TERM': ''});
+    expect(env['TERM'], 'dumb');
+  });
 }

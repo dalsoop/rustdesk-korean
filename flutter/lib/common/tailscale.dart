@@ -247,6 +247,13 @@ String _ownerLogin(Object? users, Object? userId) {
   return (user['LoginName'] as String?) ?? '';
 }
 
+// The Tailscale app binary acts as a CLI only in a shell-like environment;
+// an app opened from Finder has no TERM.
+Map<String, String> tailscaleCliEnvironment(Map<String, String> inherited) {
+  if ((inherited['TERM'] ?? '').isNotEmpty) return inherited;
+  return {...inherited, 'TERM': 'dumb'};
+}
+
 class _CommandResult {
   final int exitCode;
   final String stdout;
@@ -275,7 +282,8 @@ class Tailscale {
     if (binary == null) return null;
     final Process process;
     try {
-      process = await Process.start(binary, args);
+      process = await Process.start(binary, args,
+          environment: tailscaleCliEnvironment(Platform.environment));
     } catch (_) {
       return null;
     }
