@@ -1,13 +1,16 @@
 // Korean fork, RustDesk Public flavor: what a new user needs on the home
-// screen. A first-run guide that picks the start tab, the left-pane note that
-// this app only makes outgoing connections, a next step for every Tailscale
+// screen. A first-run guide that picks the start tab, the left-pane card on
+// how this Mac receives connections over Tailscale, a next step for every Tailscale
 // state, the reason a device card cannot be used, and the internet sign-in.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/tailscale.dart';
 import 'package:flutter_hbb/common/widgets/login.dart';
 import 'package:flutter_hbb/consts.dart';
+import 'package:flutter_hbb/desktop/pages/desktop_home_page.dart'
+    show setPasswordDialog;
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:get/get.dart';
@@ -170,22 +173,105 @@ class PublicAppLabel extends StatelessWidget {
   }
 }
 
-/// Left pane text in place of the incoming ID and password board.
-class PublicIntroCard extends StatelessWidget {
+/// Left pane card in place of the incoming ID and password board: how other
+/// tailnet devices reach this Mac. No ID and no one-time password are shown.
+class PublicIntroCard extends StatefulWidget {
   const PublicIntroCard({Key? key}) : super(key: key);
 
   @override
+  State<PublicIntroCard> createState() => _PublicIntroCardState();
+}
+
+class _PublicIntroCardState extends State<PublicIntroCard> {
+  bool _passwordSet = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Tailscale.latest.addListener(_onTailscaleRead);
+  }
+
+  @override
+  void dispose() {
+    Tailscale.latest.removeListener(_onTailscaleRead);
+    super.dispose();
+  }
+
+  // No timer of its own: each finished Tailscale read rebuilds the card, and
+  // every build re-reads the password state a settings change may have altered.
+  void _onTailscaleRead() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _readPasswordSet() async {
+    final set =
+        (await bind.mainGetCommon(key: "permanent-password-set")) == "true";
+    if (mounted && set != _passwordSet) setState(() => _passwordSet = set);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    _readPasswordSet();
+    final theme = Theme.of(context);
+    final line = TextStyle(fontSize: 12, color: theme.hintColor);
+    final snapshot = Tailscale.latest.value;
+    final ip = snapshot != null && snapshot.state == TailscaleState.running
+        ? snapshot.selfIpv4
+        : null;
     return Padding(
       padding: const EdgeInsets.only(left: 20, right: 16, top: 16, bottom: 5),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(translate('Outgoing connections only'),
-              style: Theme.of(context).textTheme.titleLarge),
+          Text(translate('Receive connections on this Mac'),
+              style: theme.textTheme.titleLarge),
           const SizedBox(height: 10),
           Text(translate('public_incoming_tip'),
-              style: Theme.of(context).textTheme.bodySmall),
+              style: theme.textTheme.bodySmall),
+          const SizedBox(height: 10),
+          if (ip != null)
+            Row(
+              children: [
+                Flexible(
+                  child: Text(translate('public_incoming_address_{$ip}'),
+                      style: line),
+                ),
+                Tooltip(
+                  message: translate('Copy'),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(4),
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: ip));
+                      showToast(translate('Copied'));
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(3),
+                      child:
+                          Icon(Icons.copy, size: 13, color: theme.hintColor),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Text(translate('public_incoming_needs_tailscale'), style: line),
+          const SizedBox(height: 6),
+          Text(
+              translate(_passwordSet
+                  ? 'public_password_set'
+                  : 'public_password_not_set'),
+              style: line),
+          TextButton(
+            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+            onPressed: () =>
+                setPasswordDialog(notEmptyCallback: _readPasswordSet),
+            child: Text(translate('Set permanent password')),
+          ),
+          if (Get.isRegistered<RxBool>(tag: 'stop-service'))
+            Obx(() => Get.find<RxBool>(tag: 'stop-service').value
+                ? Text(translate('public_incoming_stopped'),
+                    style: line.copyWith(color: theme.colorScheme.error))
+                : const SizedBox.shrink()),
         ],
       ),
     );
