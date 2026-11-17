@@ -12,6 +12,8 @@ on:
       - "flutter/lib/models/korean_toggle_key.dart"
       - "flutter/lib/common/tailscale.dart"
       - "flutter/lib/common/public_onprem.dart"
+      - "flutter/lib/common/public_login.dart"
+      - "flutter/lib/common/tailscale_range.dart"
       - "flutter/test/**"
       - ".github/workflows/flutter-unit-test.yml"
 
