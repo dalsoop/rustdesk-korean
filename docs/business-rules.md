@@ -77,7 +77,7 @@ Option `enable-input-source-toggle`, default **on** (turned off only with
   to accept on the Mac still works).
 - ranode's left pane "이 Mac에 접속받기" shows this Mac's Tailscale IPv4 (from the latest Tailscale
   read; "Tailscale이 켜져 있어야 접속받을 수 있습니다" when Tailscale is not running), whether a
-  permanent password is set with a "비밀번호 설정" button, and "지금은 접속받지 않음 (서비스 중지됨)"
+  permanent password is set with upstream's "영구 비밀번호 설정" (`Set permanent password`) button, and "지금은 접속받지 않음 (서비스 중지됨)"
   when `stop-service` is `Y`. It never shows a RustDesk ID or one-time password. A busy port is not
   shown.
 - When ranode on a Mac is closed, other Macs' on-prem tabs show that Mac as "RustDesk 없음".

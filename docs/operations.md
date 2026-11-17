@@ -101,7 +101,10 @@ on the signed build before marking the release Latest.
 
 ## ranode as the receiving app (from ko.23)
 
-Order on a Mac that still has the main app (ranode retakes a busy 21118 only when it starts):
+Order on a Mac that still has the main app (ranode retakes a busy 21118 only when it starts). If
+the main app's service is installed (`/Library/LaunchDaemons/com.carriez.RustDesk_service.plist`,
+`/Library/LaunchAgents/com.carriez.RustDesk_server.plist`), its `--server` keeps 21118 after the
+window quits: unload and remove both plists (admin) before starting ranode.
 
 ```sh
 osascript -e 'quit app "RustDesk"'             # the main app releases 21118

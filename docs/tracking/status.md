@@ -46,7 +46,7 @@ This file is written in English only.
    Mark Latest only after all pass. Release ko.22 first (or fold it in: ko.23 contains it).
 3. **Machine-setup cutover (after ko.23 is released)**, for each owner Mac: install ko.23 ranode;
    grant it Screen Recording, Accessibility and Input Monitoring; quit and remove the main app
-   before (re)starting ranode, because ranode retakes a busy 21118 only at its next start; start
+   (and its LaunchAgent/LaunchDaemon where installed) before (re)starting ranode, because ranode retakes a busy 21118 only at its next start; start
    ranode and add it as a login item; set the vault password with `--set-permanent-password`
    (stdin, as the user, ranode running); verify from another tailnet Mac.
 4. Removal of the main app from the owner's Macs and the switch of their setup (permissions,

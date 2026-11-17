@@ -285,7 +285,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_welcome_tip", "This app connects you to other devices. Choose how you will connect; you can switch tabs at any time."),
         ("public_onprem_choice_tip", "Pick a team Mac or PC connected through Tailscale from a list. Needs the Tailscale app and the account your team invited."),
         ("public_internet_choice_tip", "Connect with the RustDesk ID and password the other person gives you. Needs a RustDesk account sign-in."),
-        ("public_incoming_tip", "Devices in the same tailnet connect with the address below and this Mac's password. Nothing outside Tailscale can connect."),
+        ("public_incoming_tip", "Devices in the same tailnet connect with this Mac's Tailscale address and password. Nothing outside Tailscale can connect."),
         ("public_ts_install_tip", "The on-premises tab lists team devices connected through Tailscale. Install Tailscale and sign in with the account your team invited."),
         ("public_ts_off_tip", "Turn on the connection from the Tailscale icon in the menu bar."),
         ("public_ts_login_tip", "Sign in to the Tailscale app with the account your team invited. If you have no invitation, ask your team's administrator."),
