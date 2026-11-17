@@ -2,9 +2,9 @@
 //! `RUSTDESK_FLAVOR=public` (build.rs turns it into `RUSTDESK_BUILD_FLAVOR`).
 //!
 //! A separate app for reaching peers through the public RustDesk server. It runs under its own
-//! app name, so its config, socket and log folders never mix with the main app's, and it only
-//! accepts incoming connections from the Tailscale range. A build without the flavor never
-//! enters any of this.
+//! app name, so its config, socket and log folders never mix with the main app's. It accepts
+//! incoming connections only from the Tailscale range and only with its permanent password
+//! (set with `--set-permanent-password`). A build without the flavor never enters any of this.
 
 use base::config::keys;
 use hbb_common::{
@@ -49,8 +49,12 @@ pub fn init() {
 
 fn override_settings() -> HashMap<String, String> {
     HashMap::from([
-        (keys::OPTION_DIRECT_SERVER.to_owned(), "N".to_owned()),
+        (keys::OPTION_DIRECT_SERVER.to_owned(), "Y".to_owned()),
         (keys::OPTION_WHITELIST.to_owned(), TAILSCALE_RANGE.to_owned()),
+        (
+            keys::OPTION_VERIFICATION_METHOD.to_owned(),
+            "use-permanent-password".to_owned(),
+        ),
     ])
 }
 
@@ -179,6 +183,71 @@ pub fn probe_rustdesk_json(ip: &str) -> String {
     }
 }
 
+/// The password for `--set-permanent-password`: the first stdin line without its line ending.
+/// `rest` is what follows the flag; a password there is refused so it never sits in the process
+/// list. Refusal texts never contain the password.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn read_password_input(
+    rest: &[String],
+    stdin: &mut impl std::io::BufRead,
+) -> Result<String, &'static str> {
+    if !rest.is_empty() {
+        return Err("Refused: pass the password on stdin, not as an argument.");
+    }
+    let mut line = String::new();
+    if stdin.read_line(&mut line).is_err() {
+        return Err("Refused: could not read the password from stdin.");
+    }
+    if line.ends_with('\n') {
+        line.pop();
+        if line.ends_with('\r') {
+            line.pop();
+        }
+    }
+    if line.is_empty() {
+        return Err("Refused: the password is empty.");
+    }
+    Ok(line)
+}
+
+/// Exit code: 0 applied, 1 refused input, 2 the running app did not apply it.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn run_set_permanent_password(rest: &[String]) -> i32 {
+    if crate::platform::is_root() {
+        eprintln!("Refused: run as the logged-in user, not as root.");
+        return 1;
+    }
+    let password = match read_password_input(rest, &mut std::io::stdin().lock()) {
+        Ok(password) => password,
+        Err(reason) => {
+            eprintln!("{reason}");
+            return 1;
+        }
+    };
+    match crate::ipc::set_permanent_password(password) {
+        Ok(()) => {
+            println!("Done!");
+            0
+        }
+        Err(e) => {
+            let reason = e.to_string().replace(['\r', '\n'], " ");
+            eprintln!("Password not set (is {APP_NAME} running?): {reason}");
+            2
+        }
+    }
+}
+
+/// ranode-only CLI commands; `None` leaves `args` to upstream's handling.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub fn handle_cli(args: &[String]) -> Option<i32> {
+    match args.split_first() {
+        Some((cmd, rest)) if is_public() && cmd == "--set-permanent-password" => {
+            Some(run_set_permanent_password(rest))
+        }
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,16 +263,41 @@ mod tests {
     }
 
     #[test]
-    fn incoming_is_pinned_to_tailscale_without_direct_port() {
+    fn incoming_is_pinned_to_tailscale_with_permanent_password() {
         let settings = override_settings();
         assert_eq!(
             settings.get(keys::OPTION_DIRECT_SERVER).map(String::as_str),
-            Some("N")
+            Some("Y")
         );
         assert_eq!(
             settings.get(keys::OPTION_WHITELIST).map(String::as_str),
             Some("100.64.0.0/10")
         );
+        assert_eq!(
+            settings
+                .get(keys::OPTION_VERIFICATION_METHOD)
+                .map(String::as_str),
+            Some("use-permanent-password")
+        );
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[test]
+    fn password_is_read_from_the_first_stdin_line_only() {
+        let read = |input: &str| read_password_input(&[], &mut input.as_bytes());
+        assert_eq!(read("s3cret pw \n"), Ok("s3cret pw ".to_owned()));
+        assert_eq!(read(" s3cret\r\nnext\n"), Ok(" s3cret".to_owned()));
+        assert_eq!(read("s3cret"), Ok("s3cret".to_owned()));
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[test]
+    fn password_on_the_command_line_or_empty_is_refused() {
+        let argv = ["s3cret".to_owned()];
+        assert!(read_password_input(&argv, &mut "s3cret\n".as_bytes()).is_err());
+        assert!(read_password_input(&[], &mut "".as_bytes()).is_err());
+        assert!(read_password_input(&[], &mut "\n".as_bytes()).is_err());
+        assert!(read_password_input(&[], &mut "\r\n".as_bytes()).is_err());
     }
 
     #[test]
