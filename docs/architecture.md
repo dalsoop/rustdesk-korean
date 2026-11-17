@@ -59,7 +59,7 @@ them can listen at a time.
 ## Boundaries
 
 - What crosses into the owner's devices: only connections from 100.64.0.0/10 (and, on a company
-  Craft Mac's ranode, the office subnet) to port 21118, or via the owner's server inside Tailscale.
+  Craft Mac's ranode, the office subnet) to port 21118, by Tailscale IP or by RustDesk ID through the public RustDesk server.
   ranode is registered with the public RustDesk server; a peer arriving that way is checked by its
   own address, so only a direct path from an allowed network gets in and a relayed peer is refused.
 - ranode does not answer LAN discovery on UDP 21119 (upstream starts that listener only for an

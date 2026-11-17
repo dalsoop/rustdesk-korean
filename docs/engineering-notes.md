@@ -95,7 +95,7 @@ local keys kept going to the peer; release both when the mode changes (fixed ko.
 
 ## A running ranode overwrites its local settings
 
-- Symptom: a value written into ranode's local settings (`RustDeskPublic2.toml`) while ranode runs
+- Symptom: a value written into ranode's local settings (`RustDeskPublic_local.toml`) while ranode runs
   is lost, or not applied.
 - Cause: the running process keeps its own copy of the local settings and writes it back; the
   overrides are built once in `public_flavor::init()` at start.

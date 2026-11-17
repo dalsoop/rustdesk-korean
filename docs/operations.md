@@ -138,7 +138,7 @@ vault without echoing it. ranode then needs Screen Recording, Accessibility and 
 2. Back up ranode's `~/Library/Preferences/com.carriez.RustDeskPublic/RustDeskPublic.toml`, then
    copy the main app's `~/Library/Preferences/com.carriez.RustDesk/RustDesk.toml` over it. This
    keeps the Mac's ID, key pair and permanent password; never read or print the file's values.
-   ranode's local settings (`RustDeskPublic2.toml`) are not touched.
+   ranode's local settings (`RustDeskPublic_local.toml`) are not touched.
 3. `RustDeskPublic --set-incoming-policy`, ranode quit, as the user: Craft Macs
    `--extra-subnets <office subnet> --approve-mode password`; the owner's own Macs: skip.
 4. Start ranode, then `--set-permanent-password` from the vault (above).

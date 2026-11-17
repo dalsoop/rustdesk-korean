@@ -54,3 +54,14 @@ This file is written in English only.
 - Blast radius: an agent may pick an old branch as a base.
 - Why not now: deleting branches cannot be undone; PR #19 is closed when the ko.22 fix merges.
 - Approach: the owner approves a list of branches to delete.
+
+## Stale "owner's own server" claims about the main app
+
+- Condition: `docs/architecture.md` (Rendezvous row, main-app cell) and `docs/security-policy.md`
+  ("Who may connect in", main-app row) say the main app uses the owner's own RustDesk server; the
+  machine setup points it at the default public server. The comment in
+  `flutter/lib/desktop/pages/desktop_home_page.dart` that says ranode makes only outgoing
+  connections is stale since ko.23.
+- Blast radius: an agent planning the main-app removal or ID access reads the wrong server.
+- Why not now: outside ko.24's change scope (found in its final review).
+- Approach: reword the two rows and the comment in the next ranode cycle.

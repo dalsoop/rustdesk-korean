@@ -67,6 +67,7 @@ Android: `korean-toggle-key` holds the 한/영 button's pinned key (unset = auto
   `public-incoming-approve-mode` (`password` / `both`).
 - Output: one stdout line with the effective policy, e.g.
   `whitelist=100.64.0.0/10,10.0.0.0/24 approve-mode=password` (unset prints `approve-mode=both`); exit 0.
+  `both` means "no override": a choice saved in ranode's own settings (e.g. click only) still applies.
 - Errors (stderr, nothing saved): exit 1 for an unknown, duplicate, missing or invalid argument or
   any refused entry, or running as root; exit 2 when ranode is running (its IPC answers). Zero vs
   non-zero is the contract.
