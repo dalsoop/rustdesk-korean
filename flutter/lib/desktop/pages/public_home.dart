@@ -24,6 +24,10 @@ const double _kStatusBarHeight = 42;
 // While Tailscale is not usable yet, so the guide moves on by itself once the
 // user has installed, turned on or signed in to it.
 const Duration _kSetupPollInterval = Duration(seconds: 5);
+// A Tailscale that does not answer (for example while its app restarts) is
+// re-checked at least 5, 10, 20, then 30 seconds after the last read ended
+// (on the next 5-second tick), until it answers.
+const Duration _kNoAnswerMaxInterval = Duration(seconds: 30);
 
 enum _RustDeskState { checking, reachable, directOff, missing, unreachable }
 
@@ -34,7 +38,8 @@ class PublicHomePage extends StatefulWidget {
   State<PublicHomePage> createState() => _PublicHomePageState();
 }
 
-class _PublicHomePageState extends State<PublicHomePage> {
+class _PublicHomePageState extends State<PublicHomePage>
+    with WidgetsBindingObserver {
   static const int _onPremTab = 0;
   static const int _internetTab = 1;
 
@@ -55,6 +60,10 @@ class _PublicHomePageState extends State<PublicHomePage> {
   int _pendingChecks = 0;
   bool _memosDirty = false;
   Timer? _setupPoll;
+  // Reads in a row that found Tailscale not responding, and when the last
+  // read finished; together they space out the re-checks.
+  int _noAnswerReads = 0;
+  DateTime _lastReadDone = DateTime.now();
   String? _selectedProfileId;
   int _readSeq = 0;
   final Map<String, RustDeskReachability> _reach = {};
@@ -70,24 +79,10 @@ class _PublicHomePageState extends State<PublicHomePage> {
     _memos = OnPremRustDeskMemos.decode(
         bind.getLocalFlutterOption(k: kOptionPublicOnPremRustDeskMemos));
     _search.addListener(() => setState(() {}));
+    WidgetsBinding.instance.addObserver(this);
     _refresh();
-    _setupPoll = Timer.periodic(_kSetupPollInterval, (_) {
-      if (!_tsInstalled) {
-        if (Tailscale.findBinary() != null) {
-          setState(() => _tsInstalled = true);
-          _refresh();
-        }
-        return;
-      }
-      final state = _snapshot?.state;
-      if (_tab == _onPremTab &&
-          !_loading &&
-          !_switching &&
-          state != null &&
-          state != TailscaleState.running) {
-        _refresh();
-      }
-    });
+    _setupPoll =
+        Timer.periodic(_kSetupPollInterval, (_) => _recheckIfNotReady());
     if (!publicWelcomeDone) {
       WidgetsBinding.instance.addPostFrameCallback((_) => showPublicWelcome(
           _onWelcomeChoice,
@@ -97,9 +92,49 @@ class _PublicHomePageState extends State<PublicHomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _setupPoll?.cancel();
     _search.dispose();
     super.dispose();
+  }
+
+  // Coming back to the app (from Tailscale or any other app) re-checks at
+  // once instead of waiting for the next timer step.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) _recheckIfNotReady(now: true);
+  }
+
+  /// While Tailscale is not usable yet (not installed, not answering, off,
+  /// waiting for sign-in or approval), reads it again, so the tab moves on by
+  /// itself once Tailscale is ready.
+  void _recheckIfNotReady({bool now = false}) {
+    if (!mounted) return;
+    if (!_tsInstalled) {
+      if (Tailscale.findBinary() != null) {
+        setState(() => _tsInstalled = true);
+        _refresh();
+      }
+      return;
+    }
+    final state = _snapshot?.state;
+    if (_tab != _onPremTab ||
+        _loading ||
+        _switching ||
+        state == null ||
+        state == TailscaleState.running) {
+      return;
+    }
+    if (!now && state == TailscaleState.notResponding) {
+      var wait = _kSetupPollInterval;
+      for (var i = 1; i < _noAnswerReads && wait < _kNoAnswerMaxInterval; i++) {
+        wait *= 2;
+      }
+      if (wait > _kNoAnswerMaxInterval) wait = _kNoAnswerMaxInterval;
+      if (DateTime.now().difference(_lastReadDone) < wait) return;
+    }
+    _refresh();
   }
 
   void _onWelcomeChoice(bool internet) {
@@ -115,8 +150,19 @@ class _PublicHomePageState extends State<PublicHomePage> {
   Future<void> _refresh() async {
     final seq = ++_readSeq;
     setState(() => _loading = true);
-    final snapshot = await Tailscale.read();
+    TailscaleSnapshot snapshot;
+    try {
+      snapshot = await Tailscale.read();
+    } catch (_) {
+      // Never leave _loading set: it pauses the re-checks and the button.
+      snapshot = const TailscaleSnapshot(
+          state: TailscaleState.notResponding, profiles: [], devices: []);
+    }
     if (!mounted || seq != _readSeq) return;
+    _lastReadDone = DateTime.now();
+    _noAnswerReads = snapshot.state == TailscaleState.notResponding
+        ? _noAnswerReads + 1
+        : 0;
     final ids = snapshot.profiles.map((p) => p.id).toSet();
     setState(() {
       _snapshot = snapshot;
@@ -285,6 +331,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
       text = '';
     } else if (snapshot.state == TailscaleState.notFound) {
       text = translate('Tailscale: not found');
+    } else if (snapshot.state == TailscaleState.notResponding) {
+      text = translate('Tailscale is not responding');
     } else if (snapshot.state == TailscaleState.stopped) {
       text = translate('Tailscale is turned off');
     } else if (snapshot.state == TailscaleState.needsLogin) {
@@ -310,7 +358,8 @@ class _PublicHomePageState extends State<PublicHomePage> {
     if (snapshot == null) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
-    if (snapshot.state == TailscaleState.notFound) {
+    if (snapshot.state == TailscaleState.notFound ||
+        snapshot.state == TailscaleState.notResponding) {
       return _buildGuide(snapshot.state);
     }
     return Column(
