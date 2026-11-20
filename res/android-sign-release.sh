@@ -32,10 +32,12 @@ out=${2:?output .apk}
 if [ -z "${ANDROID_SIGN_RELEASE_INNER:-}" ]; then
   [ -f "$in" ] || { echo "no such file: $in" >&2; exit 1; }
   # Newest installed plugin, not `command -v`: a session's PATH can still hold an older plugin's bin
-  # (0.3.0 reads the retired ~/.config/vault-ops).
+  # (0.3.0 reads the retired ~/.config/vault-ops). The plugin dir is `bitwarden-secret-controller` since 0.6.0
+  # (renamed from `agent-secret-controller`); the `*/*` glob matches either name under the
+  # agent-secret-controller-skills marketplace and `sort -V` keeps the newest, so set BWSX to override.
   bwsx=${BWSX:-}
   if [ -z "$bwsx" ]; then
-    f=$(printf '%s\n' "$HOME"/.claude/plugins/cache/agent-secret-controller-skills/agent-secret-controller/*/bin/bwsx |
+    f=$(printf '%s\n' "$HOME"/.claude/plugins/cache/agent-secret-controller-skills/*/*/bin/bwsx |
       sort -V | tail -1)
     if [ -x "$f" ]; then bwsx=$f; fi
   fi
