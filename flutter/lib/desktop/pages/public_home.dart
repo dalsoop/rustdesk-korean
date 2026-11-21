@@ -184,12 +184,18 @@ class _PublicHomePageState extends State<PublicHomePage>
       final before = {for (final d in previous!.devices) d.id: d};
       for (final d in snapshot.devices) {
         final old = before[d.id];
-        if (old != null &&
-            old.online == d.online &&
-            old.ipv4 == d.ipv4 &&
-            _rustDeskState(old) != _RustDeskState.checking) {
-          kept.add(d.id);
+        if (old == null || old.online != d.online || old.ipv4 != d.ipv4) {
+          continue;
         }
+        // An online device keeps its result only once both its port check
+        // and its probe are in; one that did not answer is asked again.
+        final state = _rustDeskState(old);
+        final settled = old.online
+            ? state != _RustDeskState.checking &&
+                state != _RustDeskState.unreachable &&
+                _probe.containsKey(old.id)
+            : state != _RustDeskState.checking;
+        if (settled) kept.add(d.id);
       }
     }
     setState(() {

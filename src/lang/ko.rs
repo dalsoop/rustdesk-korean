@@ -847,7 +847,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Tailscale is not installed", "Tailscale이 설치되어 있지 않습니다"),
         ("public_ts_install_tip", "온프레미스 탭은 Tailscale로 연결된 팀 기기를 보여 줍니다. Tailscale을 설치하고 팀에서 초대받은 계정으로 로그인하세요."),
         ("Download Tailscale", "Tailscale 내려받기"),
-        ("public_ts_off_tip", "메뉴 막대의 Tailscale 아이콘에서 연결을 켜세요. 메뉴 막대 아이콘이 없는 설치(Homebrew 등)라면 tailscaled 서비스를 켜고 터미널에서 tailscale up 을 실행하세요."),
+        ("public_ts_off_tip", "메뉴 막대의 Tailscale 아이콘에서 연결을 켜세요. 메뉴 막대 아이콘이 없는 설치(Homebrew 등)라면 tailscaled 서비스를 켜고 터미널에서 tailscale up을 실행하세요."),
         ("Open Tailscale", "Tailscale 열기"),
         ("Sign in to Tailscale", "Tailscale에 로그인하세요"),
         ("public_ts_login_tip", "Tailscale 앱에서 팀에서 초대받은 계정으로 로그인하세요. 초대를 받지 못했다면 팀 관리자에게 요청하세요."),

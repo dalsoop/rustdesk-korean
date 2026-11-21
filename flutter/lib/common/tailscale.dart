@@ -386,8 +386,8 @@ class Tailscale {
         .catchError((_) => '');
     try {
       final code = await process.exitCode.timeout(timeout);
-      return _CommandResult(code, await stdout.timeout(timeout),
-          await stderr.timeout(timeout));
+      final out = await Future.wait([stdout, stderr]).timeout(timeout);
+      return _CommandResult(code, out[0], out[1]);
     } catch (_) {
       _stop(process);
       return null;
