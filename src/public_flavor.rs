@@ -20,7 +20,8 @@ use std::{
 };
 
 pub const APP_NAME: &str = "RustDeskPublic";
-const TAILSCALE_RANGE: &str = "100.64.0.0/10";
+// Tailscale's IPv4 and IPv6 ranges, in the whitelist's comma-separated form.
+const TAILSCALE_RANGE: &str = "100.64.0.0/10,fd7a:115c:a1e0::/48";
 const INTERNAL_ID_DOMAIN: &str = "@rustdesk.internal.kr";
 const CLEANUP_DONE_OPTION: &str = "public-flavor-cleanup-done";
 pub const DISCOVERY_PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
@@ -183,6 +184,110 @@ pub fn probe_rustdesk_json(ip: &str) -> String {
     }
 }
 
+fn in_tailscale_range(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            let [a, b, ..] = v4.octets();
+            a == 100 && b & 0xc0 == 64
+        }
+        IpAddr::V6(v6) => v6.segments()[..3] == [0xfd7a, 0x115c, 0xa1e0],
+    }
+}
+
+// macOS names every tunnel `utunN` (the Tailscale app and Homebrew's tailscaled alike); on Linux
+// and Windows the interface is called Tailscale.
+fn is_tailscale_interface_name(name: &str) -> bool {
+    name.starts_with("utun") || name.to_ascii_lowercase().starts_with("tailscale")
+}
+
+/// Whether `ip` is assigned to this computer's Tailscale interface: a tunnel that also carries
+/// a Tailscale IPv6 address, which other VPNs using 100.64.0.0/10 on a `utun` (Cloudflare WARP,
+/// for one) do not have. A tailnet with IPv6 turned off fails closed here.
+#[cfg(not(target_os = "ios"))]
+fn is_on_tailscale_interface(ip: IpAddr) -> bool {
+    default_net::get_interfaces().iter().any(|i| {
+        (is_tailscale_interface_name(&i.name)
+            || i.friendly_name
+                .as_deref()
+                .is_some_and(is_tailscale_interface_name))
+            && i.ipv6
+                .iter()
+                .any(|n| in_tailscale_range(IpAddr::V6(n.addr)))
+            && match ip {
+                IpAddr::V4(v4) => i.ipv4.iter().any(|n| n.addr == v4),
+                IpAddr::V6(v6) => i.ipv6.iter().any(|n| n.addr == v6),
+            }
+    })
+}
+
+#[cfg(target_os = "ios")]
+fn is_on_tailscale_interface(_ip: IpAddr) -> bool {
+    false
+}
+
+/// The address this computer sends from to reach `peer`, i.e. which interface its route uses.
+/// A connected UDP socket sends nothing.
+fn route_source(peer: IpAddr) -> Option<IpAddr> {
+    let bind: SocketAddr = if peer.is_ipv4() {
+        ([0, 0, 0, 0], 0).into()
+    } else {
+        ([0u16; 8], 0).into()
+    };
+    let socket = UdpSocket::bind(bind).ok()?;
+    socket.connect((peer, 9)).ok()?;
+    Some(socket.local_addr().ok()?.ip())
+}
+
+/// A peer address in the Tailscale range is trusted only when the connection reached this
+/// computer on a Tailscale address of its Tailscale interface and the way back to the peer runs
+/// through that same address. The whitelist alone checks only the peer's address, which a
+/// carrier or hotel network handing out 100.64.0.0/10 on its LAN could also present; the route
+/// check covers such a peer that sends to this Mac's Tailscale IP over the LAN (macOS accepts a
+/// packet for any of its addresses on any interface).
+fn tailscale_path_allowed(
+    peer: IpAddr,
+    local: IpAddr,
+    on_tailscale_interface: impl Fn(IpAddr) -> bool,
+    route_source: impl Fn(IpAddr) -> Option<IpAddr>,
+) -> bool {
+    !in_tailscale_range(peer)
+        || (in_tailscale_range(local)
+            && on_tailscale_interface(local)
+            && route_source(peer) == Some(local))
+}
+
+/// Korean fork hook for `Connection::on_open`, next to the whitelist check. `true` outside ranode.
+pub fn incoming_path_allowed(peer: SocketAddr, local: SocketAddr) -> bool {
+    if !is_public() {
+        return true;
+    }
+    tailscale_path_allowed(
+        hbb_common::try_into_v4(peer).ip(),
+        hbb_common::try_into_v4(local).ip(),
+        is_on_tailscale_interface,
+        route_source,
+    )
+}
+
+// The direct listener's last bind attempt: 0 none yet, 1 listening, 2 failed (port in use).
+static DIRECT_LISTENER: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Korean fork hook for upstream's direct listener; only ranode records it.
+pub fn set_direct_listener(listening: bool) {
+    if is_public() {
+        DIRECT_LISTENER.store(
+            if listening { 1 } else { 2 },
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+}
+
+/// For the left pane card: the direct port could not be opened (another app holds it), so this
+/// app does not receive until it is started again with the port free.
+pub fn direct_listener_failed() -> bool {
+    DIRECT_LISTENER.load(std::sync::atomic::Ordering::Relaxed) == 2
+}
+
 /// The password for `--set-permanent-password`: the first stdin line without its line ending.
 /// `rest` is what follows the flag; a password there is refused so it never sits in the process
 /// list. Refusal texts never contain the password.
@@ -271,7 +376,7 @@ mod tests {
         );
         assert_eq!(
             settings.get(keys::OPTION_WHITELIST).map(String::as_str),
-            Some("100.64.0.0/10")
+            Some("100.64.0.0/10,fd7a:115c:a1e0::/48")
         );
         assert_eq!(
             settings
@@ -330,5 +435,38 @@ mod tests {
             }
             _ => panic!("not a discovery message"),
         }
+    }
+
+    #[test]
+    fn tailscale_peers_are_trusted_only_on_the_tailscale_interface() {
+        let ip = |s: &str| s.parse::<IpAddr>().unwrap();
+        let utun = |a: IpAddr| a == ip("100.101.2.3") || a == ip("fd7a:115c:a1e0::3");
+        // This Mac sits on a hotel LAN 100.70.0.0/16 (address 100.70.0.3) and in a tailnet.
+        let route = |peer: IpAddr| {
+            Some(match peer {
+                IpAddr::V4(v4) if v4.octets()[..2] == [100, 70] => ip("100.70.0.3"),
+                IpAddr::V4(v4) if v4.octets()[0] == 100 => ip("100.101.2.3"),
+                IpAddr::V4(_) => ip("192.168.0.5"),
+                IpAddr::V6(_) => ip("fd7a:115c:a1e0::3"),
+            })
+        };
+        let allowed =
+            |peer: &str, local: &str| tailscale_path_allowed(ip(peer), ip(local), utun, route);
+        // Tailscale peers to this Mac's Tailscale address on its Tailscale interface.
+        assert!(allowed("100.64.0.9", "100.101.2.3"));
+        assert!(allowed("fd7a:115c:a1e0::9", "fd7a:115c:a1e0::3"));
+        // A 100.64.0.0/10 source on the LAN, to the LAN address or to the Tailscale address.
+        assert!(!allowed("100.70.0.9", "100.70.0.3"));
+        assert!(!allowed("100.70.0.9", "100.101.2.3"));
+        assert!(!allowed("100.64.0.9", "192.168.0.5"));
+        assert!(!allowed("fd7a:115c:a1e0::9", "2001:db8::5"));
+        // Outside the Tailscale range this check has no say; the whitelist decides.
+        assert!(allowed("192.168.0.9", "192.168.0.5"));
+        assert!(!in_tailscale_range(ip("100.128.0.1")));
+        assert!(!in_tailscale_range(ip("100.63.255.255")));
+        assert!(!in_tailscale_range(ip("fd7a:115c:a1e1::1")));
+        assert!(is_tailscale_interface_name("utun4"));
+        assert!(is_tailscale_interface_name("tailscale0"));
+        assert!(!is_tailscale_interface_name("en0"));
     }
 }

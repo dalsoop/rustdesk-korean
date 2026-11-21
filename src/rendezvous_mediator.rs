@@ -1364,6 +1364,7 @@ async fn direct_server(server: ServerPtr) {
             match hbb_common::tcp::listen_any(port as _).await {
                 Ok(l) => {
                     listener = Some(l);
+                    crate::public_flavor::set_direct_listener(true);
                     log::info!(
                         "Direct server listening on: {:?}",
                         listener.as_ref().map(|l| l.local_addr())
@@ -1371,6 +1372,7 @@ async fn direct_server(server: ServerPtr) {
                 }
                 Err(err) => {
                     // to-do: pass to ui
+                    crate::public_flavor::set_direct_listener(false);
                     log::error!(
                         "Failed to start direct server on port: {}, error: {}",
                         port,

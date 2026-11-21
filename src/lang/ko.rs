@@ -840,7 +840,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_onprem_choice_tip", "Tailscale로 연결된 팀 Mac·PC를 목록에서 골라 바로 접속합니다. Tailscale 앱과 팀에서 초대받은 계정이 필요합니다."),
         ("Connect over the internet", "인터넷으로 접속"),
         ("public_internet_choice_tip", "상대가 알려 준 RustDesk ID와 비밀번호로 접속합니다. RustDesk 계정 로그인이 필요합니다."),
-        ("public_incoming_tip", "같은 Tailscale 망의 기기가 이 Mac의 Tailscale 주소와 비밀번호로 접속합니다. Tailscale 밖에서는 접속할 수 없습니다."),
+        ("public_incoming_tip", "같은 Tailscale 망의 기기가 Tailscale을 거쳐 이 Mac의 Tailscale 주소로 접속하고, 고정 비밀번호를 넣거나 이 Mac 앞에서 수락하면 들어옵니다. Tailscale 밖에서는 접속할 수 없고, 일회용 비밀번호는 받지 않습니다."),
         ("Later", "나중에"),
         ("Show the welcome guide", "시작 안내 다시 보기"),
         ("Outgoing connections only", "접속하는 쪽 전용"),
@@ -885,7 +885,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_incoming_address_{}", "Tailscale 주소: {}"),
         ("public_incoming_needs_tailscale", "Tailscale이 켜져 있어야 접속받을 수 있습니다"),
         ("public_password_set", "비밀번호: 설정됨"),
-        ("public_password_not_set", "비밀번호: 설정 안 됨"),
+        ("public_password_not_set", "비밀번호: 설정 안 됨 · 그동안은 이 Mac 앞에서 수락해야만 들어옵니다"),
         ("public_incoming_stopped", "지금은 접속받지 않음 (서비스 중지됨)"),
         ("public_config_screen", "다른 기기가 이 Mac의 화면을 보려면 시스템 설정 → 개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음에서 \"RustDesk (forked ranode)\"를 켜세요."),
         ("public_config_acc", "다른 기기가 이 Mac을 조작하려면 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용에서 \"RustDesk (forked ranode)\"를 켜세요."),
@@ -899,5 +899,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_tailnet_unknown_tip", "Tailscale 망 이름을 읽지 못해 지금은 즐겨찾기를 저장할 수 없습니다. 잠시 뒤 다시 해 보세요."),
         ("No answer from RustDesk", "RustDesk 응답 없음"),
         ("public_no_answer_help", "이 기기는 Tailscale에 연결되어 있지만 RustDesk 포트(21118)도 RustDesk도 제때 응답하지 않았습니다. 그 기기의 방화벽이 포트를 막고 있거나, 그 기기에서 RustDesk가 꺼져 있거나, 연결이 느릴 수 있습니다. 잠시 뒤 다시 확인하세요."),
+        ("public_incoming_checking_tailscale", "Tailscale 상태를 확인하는 중입니다 · 연결되면 이 Mac의 Tailscale 주소가 나타납니다"),
+        ("public_incoming_port_busy", "지금은 접속받지 않음: 다른 앱(RustDesk 본 앱 등)이 21118 포트를 쓰고 있습니다. 그 앱을 끈 뒤 이 앱을 다시 실행하세요."),
+        ("public_incoming_no_tailscale_tip", "다른 기기는 Tailscale을 거쳐서만 이 Mac에 접속할 수 있습니다. 같은 Tailscale 망의 기기에서 접속받으려면 이 Mac에 Tailscale을 설치하세요."),
     ].iter().cloned().collect();
 }

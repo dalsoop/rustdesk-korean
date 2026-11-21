@@ -33,6 +33,10 @@ This file is written in English only.
 - msi Cancel fix (issue #10, error 2866) and the signing script's LaunchServices cleanup: merged
   for the next release; the msi builds in CI, the Windows PC check and the first real signing run
   are open in `findings.md`.
+- ko.23 incoming fixes of the same QA: a Tailscale-range peer must arrive on the Tailscale
+  interface with the route back through it (decision 0009); Tailscale IPv6 peers accepted; the
+  card shows a busy 21118 and an unsettled Tailscale, and its texts match what is enforced.
+  `cargo test --lib public_flavor` (6) passed on m5m1.
 
 ## Remaining, in order
 
@@ -55,7 +59,12 @@ This file is written in English only.
       not a switch screen back;
    9. a tailnet Mac with ranode quit shows "RustDesk 없음"; a peer whose firewall drops 21118 shows
       "접속 불가" under "RustDesk 응답 없음" and is not remembered;
-   10. with a newer Latest release, the update card names "RustDesk (forked ranode)".
+   10. with a newer Latest release, the update card names "RustDesk (forked ranode)";
+   11. another tailnet Mac connects by this Mac's Tailscale IPv6 address too; a LAN host given a
+       100.70.0.x alias (`ifconfig en0 alias`, removed afterwards) is refused both at this Mac's
+       LAN address and at its Tailscale IP routed over the LAN (decision 0009);
+   12. with the main app holding 21118, the card shows the busy-port line in red; before a
+       password is set it says only a click at the Mac lets a device in.
    Mark Latest only after all pass.
 2. **Machine-setup cutover (after ko.23 is released)**, for each owner Mac: install ko.23 ranode;
    grant it Screen Recording, Accessibility and Input Monitoring; quit and remove the main app

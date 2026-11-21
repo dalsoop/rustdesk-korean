@@ -899,6 +899,9 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_tailnet_unknown_tip", ""),
         ("No answer from RustDesk", ""),
         ("public_no_answer_help", ""),
+        ("public_incoming_checking_tailscale", ""),
+        ("public_incoming_port_busy", ""),
+        ("public_incoming_no_tailscale_tip", ""),
     ].iter().cloned().collect();
 }
 

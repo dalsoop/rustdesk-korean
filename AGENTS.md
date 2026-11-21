@@ -55,7 +55,9 @@ rustdesk-korean/
   (`com.carriez.rustdesk` / `RustDesk` / `rustdesk`; `net.ranode.rustdesk-public` /
   `RustDeskPublic` / `rustdeskpublic`): macOS permissions, settings and the service hang on them.
 - Incoming connections to the owner's devices are accepted only from the Tailscale range
-  100.64.0.0/10. No change may open a device to the internet.
+  100.64.0.0/10 (ranode from ko.23 also Tailscale's IPv6 fd7a:115c:a1e0::/48, and only when the
+  connection arrives on this Mac's Tailscale interface, decision 0009). No change may open a
+  device to the internet.
 - Signing keys are the owner's personal assets: never copy them into CI, a company store or the repo.
 
 ## Before you work

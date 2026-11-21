@@ -42,6 +42,9 @@ Not this module's scope: upstream pages beyond thin `bind.mainIsPublicFlavor()` 
 - Option names `public-onprem-records`, `public-onprem-rustdesk-memos`, `public-start-tab`,
   `public-welcome-done`, `korean-toggle-key` are stored user data; renaming them loses it.
 - `kPublicAppDisplayName` equals `RUSTDESK_DISPLAY_NAME` in `build.py`.
+- `PublicIntroCard` has no timer: it rebuilds on `Tailscale.latest` (kept fresh on every tab by the
+  home page's 30 s re-read) and reads `bind.mainPublicDirectPortBusy()` on each build; its texts
+  must say only what `public_flavor` enforces (Tailscale-only path, permanent password or click).
 - Soft keyboard: F19 is never re-sent inside a word; diffs are by grapheme cluster.
 
 ## Tests
