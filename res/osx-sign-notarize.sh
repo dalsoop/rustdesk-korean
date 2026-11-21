@@ -23,11 +23,20 @@ export SOPS_AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/m5m1-se.tx
 mkdir -p "$HOME/tmp"
 tmp=$(mktemp -d "$HOME/tmp/osx-sign.XXXXXX")
 chmod 700 "$tmp"
-trap 'rm -rf "$tmp"' EXIT
+stage="$tmp/stage"
+lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+# LaunchServices registers the stage copy; unregister it before deleting it, or a dead record with
+# the installed app's bundle id is left behind (open -b, URL schemes).
+cleanup() {
+  if [ -d "$stage/$name" ]; then
+    "$lsregister" -u "$stage/$name" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$tmp"
+}
+trap cleanup EXIT
 
 out=$(dirname "$zip")
 mkdir -p "$out"
-stage="$tmp/stage"
 mkdir -p "$stage"
 ditto "$app" "$stage/$name"
 
