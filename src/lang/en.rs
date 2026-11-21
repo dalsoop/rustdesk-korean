@@ -287,7 +287,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_internet_choice_tip", "Connect with the RustDesk ID and password the other person gives you. Needs a RustDesk account sign-in."),
         ("public_incoming_tip", "Devices in the same tailnet connect with this Mac's Tailscale address and password. Nothing outside Tailscale can connect."),
         ("public_ts_install_tip", "The on-premises tab lists team devices connected through Tailscale. Install Tailscale and sign in with the account your team invited."),
-        ("public_ts_off_tip", "Turn on the connection from the Tailscale icon in the menu bar."),
+        ("public_ts_off_tip", "Turn on the connection from the Tailscale icon in the menu bar. Without a menu bar icon (for example a Homebrew install), start the tailscaled service and run tailscale up in Terminal."),
         ("public_ts_login_tip", "Sign in to the Tailscale app with the account your team invited. If you have no invitation, ask your team's administrator."),
         ("public_ts_approval_tip", "An administrator of this tailnet has to approve this Mac. Check again once it is approved."),
         ("public_ts_empty_tip", "Devices signed in to the same tailnet appear here. Check that the other device is signed in to Tailscale with an account of this tailnet."),
@@ -309,5 +309,10 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_incoming_stopped", "Not receiving connections now (service stopped)"),
         ("public_config_screen", "For another device to see this Mac's screen, turn on \"RustDesk (forked ranode)\" in System Settings → Privacy & Security → Screen & System Audio Recording."),
         ("public_config_acc", "For another device to control this Mac, turn on \"RustDesk (forked ranode)\" in System Settings → Privacy & Security → Accessibility."),
+        ("public_ts_unreadable_tip", "Tailscale answered, but not with a status this app can read. This screen checks again by itself. If it stays here, open the Tailscale app or update Tailscale."),
+        ("public_ts_connecting_tip", "Tailscale is starting or reconnecting, for example after sleep or a network change. This screen moves on by itself once it is connected."),
+        ("public_ts_other_user_tip", "Another user account on this computer is using Tailscale. Disconnect it there, or open the Tailscale app here and take it over."),
+        ("public_tailnet_unknown_tip", "The Tailscale network name could not be read, so favorites cannot be saved right now. Try again in a moment."),
+        ("public_no_answer_help", "This device is online in Tailscale, but neither its RustDesk port (21118) nor RustDesk itself answered in time. Its firewall may block the port, RustDesk may be closed there, or the connection is slow. Check again in a moment."),
     ].iter().cloned().collect();
 }

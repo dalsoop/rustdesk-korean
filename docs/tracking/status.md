@@ -23,6 +23,13 @@ This file is written in English only.
   with its permanent password only; left pane "이 Mac에 접속받기"; `--set-permanent-password`.
   Built: Rust compiled in the Windows/Linux CI build; Flutter tests green in CI; the Rust unit
   tests (`public_flavor`, 5) passed on `m5m1` on 2026-11-21 at 223d2e56 and run in CI from then.
+- ko.23 also carries the client-visible fixes of the 2026-11-21 QA (merged after PR #36, no
+  version bump): own states for connecting, unreadable output and another user; re-reads every
+  30 s while running and on every tab; the tab follows a tailnet switch made outside the app; a
+  failed tailnet-list read keeps the last list and nothing is saved under an empty tailnet; a
+  port-check timeout is "접속 불가", never a remembered "RustDesk 없음"; shared-in devices with a
+  duplicate short name; Homebrew `tailscaled` preferred over a leftover app; Korean wording; the
+  update card's app name. Flutter tests passed on m5m1 (54); the live checks are in item 1 below.
 
 ## Remaining, in order
 
@@ -38,7 +45,14 @@ This file is written in English only.
       "지금은 접속받지 않음 (서비스 중지됨)";
    6. `--set-permanent-password` with the password on stdin sets it (exit 0), exits non-zero with
       ranode quit, and is refused under sudo;
-   7. a one-time password is refused; the permanent password works.
+   7. a one-time password is refused; the permanent password works;
+   8. launched from Finder, with the window open: turning Tailscale off in its menu shows
+      "Tailscale이 꺼져 있습니다" within about 30 s, turning it on shows "연결하는 중입니다" (if
+      caught) and then the list; switching tailnet in the Tailscale menu shows the new tailnet,
+      not a switch screen back;
+   9. a tailnet Mac with ranode quit shows "RustDesk 없음"; a peer whose firewall drops 21118 shows
+      "접속 불가" under "RustDesk 응답 없음" and is not remembered;
+   10. with a newer Latest release, the update card names "RustDesk (forked ranode)".
    Mark Latest only after all pass.
 2. **Machine-setup cutover (after ko.23 is released)**, for each owner Mac: install ko.23 ranode;
    grant it Screen Recording, Accessibility and Input Monitoring; quit and remove the main app

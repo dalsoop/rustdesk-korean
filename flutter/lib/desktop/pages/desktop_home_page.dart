@@ -477,7 +477,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       }
       return buildInstallCard(
           "Status",
-          "${translate("new-version-of-{${bind.mainGetAppNameSync()}}-tip")} (${bind.mainGetNewVersion()}).",
+          // Korean fork: ranode's app name is the internal RustDeskPublic.
+          "${translate("new-version-of-{${bind.mainIsPublicFlavor() ? kPublicAppDisplayName : bind.mainGetAppNameSync()}}-tip")} (${bind.mainGetNewVersion()}).",
           btnText,
           onPressed,
           closeButton: true,

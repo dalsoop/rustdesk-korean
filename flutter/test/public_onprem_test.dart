@@ -72,6 +72,8 @@ void main() {
     expect(onPremSectionOf(byName['mac']!, OnPremRustDesk.missing),
         OnPremSection.missing);
     expect(onPremSectionOf(byName['mac']!, null), OnPremSection.checking);
+    expect(onPremSectionOf(byName['mac']!, null, noAnswer: true),
+        OnPremSection.missing);
     expect(onPremSectionOf(byName['old']!, OnPremRustDesk.directOff),
         OnPremSection.offline);
 
