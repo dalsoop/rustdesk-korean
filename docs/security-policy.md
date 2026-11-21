@@ -18,7 +18,7 @@ This file is written in English only.
 |---|---|---|---|
 | A device inside the owner's tailnet (source in 100.64.0.0/10) | Connect to the main app on an owner's Mac | Direct port 21118 is on (`direct-server=Y`) and whitelist is `100.64.0.0/10`, both set with `sudo RustDesk --option` on that Mac; or through the owner's own RustDesk server, reachable only inside Tailscale; then the permanent password | — |
 | Any address outside 100.64.0.0/10 (internet, LAN, public relay) | Connect in | never | the whitelist refuses any connection whose source address is outside the range |
-| A device inside the owner's tailnet | Connect in to ranode (from ko.23) | ranode is running in the logged-in session, its source is in 100.64.0.0/10, and it gives ranode's permanent password (or someone at the Mac clicks accept); `direct-server=Y`, the whitelist and `use-permanent-password` are pinned in code (`OVERWRITE_SETTINGS`), which saved settings cannot override | the one-time password; changing the pinned settings through the UI, config files or `--option` |
+| A device inside the owner's tailnet | Connect in to ranode (from ko.23) | ranode is running in the logged-in session, its source is in 100.64.0.0/10 or fd7a:115c:a1e0::/48, the connection arrived on this Mac's Tailscale interface (decision 0009), and it gives ranode's permanent password (or someone at the Mac clicks accept); `direct-server=Y`, the whitelist and `use-permanent-password` are pinned in code (`OVERWRITE_SETTINGS`), which saved settings cannot override | the one-time password; changing the pinned settings through the UI, config files or `--option`; a 100.64.0.0/10 source that reaches the Mac on another interface (a carrier or hotel LAN using that range) |
 | Someone without Tailscale | Reach an owner's device | only by being invited into the tailnet | opening a port or a public-server path for them |
 
 - The office Linux server gets `direct-server=Y` from its own infrastructure repo, not from this fork.
@@ -28,7 +28,10 @@ This file is written in English only.
 ## Incoming authentication
 
 1. The connection's source address is checked against the whitelist; outside it the peer is refused
-   before any password prompt.
+   before any password prompt. In ranode a source in a Tailscale range is then refused too unless
+   the accepted socket's local address is a Tailscale address of this Mac's Tailscale interface
+   and the route back to the peer leaves from that address (`public_flavor::incoming_path_allowed`,
+   decision 0009), with the same "Your ip is blocked by the peer" error.
 2. The peer sends the permanent password; a wrong one is refused and counted by upstream's
    attempt limiter. The fork adds no lockout, approval click or second factor of its own.
 3. Accepted sessions show upstream's connection window on the Mac; the fork keeps no extra log.

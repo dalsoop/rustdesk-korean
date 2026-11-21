@@ -37,7 +37,7 @@ One source tree, two builds. `RUSTDESK_FLAVOR=public` is read by `build.py` (wri
 | Bundle id / app name / scheme | `com.carriez.rustdesk` / `RustDesk` / `rustdesk` | `net.ranode.rustdesk-public` / `RustDeskPublic` / `rustdeskpublic` |
 | Config, IPC socket, logs | under `RustDesk` | under `RustDeskPublic` (never shared) |
 | Rendezvous server | the owner's own RustDesk server, reachable only inside Tailscale | public RustDesk server (internet tab) |
-| Incoming | yes; direct port 21118 + whitelist 100.64.0.0/10 set on each Mac with `sudo RustDesk --option` | from ko.23 yes, in its own GUI process: pinned `direct-server=Y`, whitelist 100.64.0.0/10, permanent password only; until ko.22 no |
+| Incoming | yes; direct port 21118 + whitelist 100.64.0.0/10 set on each Mac with `sudo RustDesk --option` | from ko.23 yes, in its own GUI process: pinned `direct-server=Y`, whitelist 100.64.0.0/10 and fd7a:115c:a1e0::/48, arriving on the Tailscale interface only (decision 0009), permanent password only; until ko.22 no |
 | Service (LaunchDaemon/Agent) | upstream's service can be installed per Mac; the owner does not need login-screen access | refused in code |
 
 Both use TCP 21118 (direct access) and UDP 21119 (LAN discovery) when they listen, so only one of
@@ -63,9 +63,12 @@ them can listen at a time.
 
 ## Boundaries
 
-- What crosses into the owner's devices: only connections from 100.64.0.0/10 to port 21118, or via
+- What crosses into the owner's devices: only connections from 100.64.0.0/10 (ranode also
+  fd7a:115c:a1e0::/48) to port 21118, or via
   the owner's server inside Tailscale. ranode stays registered with the public RustDesk server, but
-  a peer reaching it that way has a non-Tailscale address and is refused by the whitelist.
+  a peer reaching it that way has a non-Tailscale address and is refused by the whitelist. A
+  Tailscale-range address that reaches ranode outside its Tailscale interface is refused as well
+  (decision 0009).
 - ranode does not answer LAN discovery on UDP 21119 (upstream starts that listener only for an
   "installed" app), so other Macs find a ranode-only Mac through TCP 21118 alone.
 - The Tailscale module never talks to Tailscale's servers or LocalAPI; it only runs the local CLI.

@@ -94,7 +94,7 @@ void _showInternetOnlyWelcome() {
         children: [
           Text(translate('public_welcome_internet_tip')),
           const SizedBox(height: 14),
-          Text(translate('public_incoming_tip'), style: hint),
+          Text(translate('public_incoming_no_tailscale_tip'), style: hint),
         ],
       ),
       actions: [dialogButton('Start', onPressed: finish)],
@@ -254,7 +254,11 @@ class _PublicIntroCardState extends State<PublicIntroCard> {
               ],
             )
           else
-            Text(translate('public_incoming_needs_tailscale'), style: line),
+            Text(
+                translate(_tailscaleStateUnsettled(snapshot?.state)
+                    ? 'public_incoming_checking_tailscale'
+                    : 'public_incoming_needs_tailscale'),
+                style: line),
           const SizedBox(height: 6),
           Text(
               translate(_passwordSet
@@ -272,11 +276,23 @@ class _PublicIntroCardState extends State<PublicIntroCard> {
                 ? Text(translate('public_incoming_stopped'),
                     style: line.copyWith(color: theme.colorScheme.error))
                 : const SizedBox.shrink()),
+          // Read on every rebuild (each Tailscale read): another app holding
+          // the direct port means nothing reaches this app until it restarts.
+          if (bind.mainPublicDirectPortBusy())
+            Text(translate('public_incoming_port_busy'),
+                style: line.copyWith(color: theme.colorScheme.error)),
         ],
       ),
     );
   }
 }
+
+// Not known yet, starting up, or not answering: the address may still come.
+bool _tailscaleStateUnsettled(TailscaleState? state) =>
+    state == null ||
+    state == TailscaleState.connecting ||
+    state == TailscaleState.notResponding ||
+    state == TailscaleState.unreadable;
 
 /// The next step for an on-prem tab that has no device to show. [state] is
 /// [TailscaleState.running] when the tailnet simply has no other device.
