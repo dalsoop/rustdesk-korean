@@ -1,6 +1,6 @@
 This file is written in English only.
 
-# Status (2026-11-21)
+# Status (2026-11-22)
 
 ## Released
 
@@ -9,20 +9,55 @@ This file is written in English only.
 | Android Korean soft keyboard (grapheme diff, 두벌식 to Linux, F19/F24, 한/영 button) | released since ko.1–ko.4 | 3 Flutter test files run in CI on push (green 2026-11-17); checked by hand on a Galaxy Z Fold to macOS (ko.1) and to Pop!_OS COSMIC/fcitx5 (ko.3) |
 | Desktop 한/영 → peer OS key, macOS input-source switch, local hotkey pause | released ko.5–ko.10 | Rust unit tests: 26 in `hangul_key` run in CI (`fork-rust-tests.yml`, push and PRs); `platform::macos` (13, input source and hotkey flags) Mac-only; all passed on m5m1 2026-11-21 at 223d2e56; never tested with a Windows peer |
 | Fork update check | released ko.11 | Rust unit tests `fork_update` (4), `updater` (3) run in CI (push and PRs); passed on m5m1 2026-11-21 |
-| ranode (on-prem + internet tabs, onboarding, sections, identity, optional Tailscale, public sign-in) | released up to ko.23 (latest release, 2026-11-21) | Flutter tests `tailscale_test`, `public_onprem_test` run in CI on push and PRs. ko.22 signed build checked live on m5m1 (opened with `open -b` and from a terminal: device list and "Tailscale: … 연결됨") and on m5m2 after install (device list); ko.23 signed build checked live on m5m1 (below) |
-| ranode incoming from the tailnet (Tailscale interface and return route, IPv6 tailnet range, permanent password only, exclusive 21118, left-pane card) | released ko.23 (2026-11-21), not yet receiving on any Mac | Rust tests `public_flavor` (6 of the 39 fork tests) passed on m5m1 at the release commit 80d94a8b and in CI. Live: only the card and the busy-port path were checked (main app keeps 21118 on every Mac until the cutover); the incoming checks wait for the cutover (Remaining, item 1) |
+| ranode (on-prem + internet tabs, onboarding, sections, identity, optional Tailscale, public sign-in) | released up to ko.24 (latest release, 2026-11-22) | Flutter tests `tailscale_test`, `public_onprem_test` run in CI on push and PRs. ko.22 signed build checked live on m5m1 (opened with `open -b` and from a terminal: device list and "Tailscale: … 연결됨") and on m5m2 after install (device list); ko.23 signed build checked live on m5m1 (below) |
+| ranode incoming from the tailnet (Tailscale interface and return route, IPv6 tailnet range, permanent password only, exclusive 21118, left-pane card) | released ko.23 (2026-11-21); receiving on m5m1 since its cutover (2026-11-22) | Rust tests `public_flavor` passed on m5m1 at 80d94a8b and 6b6ed6c7 and in CI. Live on m5m1 after the cutover: below ("ko.24 release and m5m1 cutover") |
+| ranode incoming by RustDesk ID, per-Mac incoming policy, relayed incoming refused, ID on the card | released ko.24 (2026-11-22) | Fork Rust tests (42) and `platform::macos` (13) passed on m5m1 at 6b6ed6c7; CI green. Live on m5m1: below |
 | Windows msi Cancel fix (issue #10, error 2866) | released ko.23 | msi built in CI; not checked on a Windows PC (`findings.md`) |
 | Main app shown as "RustDesk (for korean)" | released ko.19 | installed on the owner's Macs |
 
 ## Merged, not released
 
-- ko.24 (version `1.5.0+6824`, PR #37, merged 2026-11-21): ranode accepts ID connections like the
-  main app (per-Mac whitelist and approve mode via `--set-incoming-policy`, floor adds
-  `allow-remote-config-modification=N`); the left pane shows the ID. Office-subnet peers get the
-  decision 0009 rule too (own address in that subnet, non-tunnel interface, route back through
-  it), and ranode refuses every relayed incoming connection (decision 0009 addendum). Fork Rust
-  tests (42) and `platform::macos` (13) passed on m5m1; CI green. Not released: it awaits its own
-  release with the live checks (Remaining, item 4) and the machine cutover.
+- Nothing.
+
+## ko.24 release and m5m1 cutover (2026-11-22)
+
+Release `1.5.0-ko.24` on 6b6ed6c7 (merge of PR #37; `version: 1.5.0+6824`), marked Latest after the
+live checks below, built, signed and published on m5m1 as a notarized Developer ID release (not an
+internal build): both macOS zips "Notarized Developer ID", Windows/Linux from CI run 44871878795,
+Android from upstream-mono MR !57 signed with the pinned certificate (versionCode 8824). Owner's
+word for the release and the cutover: "진행" (2026-11-22, session m5m1).
+
+m5m1 cutover (operations "Cutover keeping the Mac's ID"; m5m1 is an owner Mac, so no incoming
+policy was set): ranode ko.24 installed; Screen Recording, Accessibility and Input Monitoring on
+for `net.ranode.rustdesk-public`; the main app's user agent and root daemon unloaded and their
+plists moved out; the main app's `RustDesk.toml` copied over ranode's; ranode started and took
+21118; permanent password set from the vault with `--set-permanent-password` (exit 0); ranode added
+as a login item; after the checks the main app bundle and its Dock item were moved out of
+`/Applications` (kept in a backup on m5m1 with a one-step rollback, see the task record).
+`RustDeskPublic --get-id` printed the main app's ID before and after, and the card shows it.
+Tailscale was never stopped, restarted or switched; SSH stayed up throughout. m5m2 and the
+MacBooks were not cut over (m5m2 keeps the main app and ranode ko.22).
+
+Live checks (client: ranode ko.22 on m5m2; numbers of the ko.23 list in Remaining 1 and the ko.24
+list in Remaining 4 of the previous status):
+
+| Item | Result |
+|---|---|
+| ko.23 1: tailnet Mac connects by Tailscale IP + permanent password and controls it | passed: m5m2 → 100.x of m5m1, session opened with the permanent password, m5m1's screen shown on m5m2, video service started on m5m1; input not exercised |
+| ko.23 2 / ko.24 2: connection through the public server refused | passed: by ID from m5m2, the peer arrived from the shared public address (WebRTC path) and got "귀하의 IP가 상대방에 의해 차단되었습니다" |
+| ko.23 4: after the main app left, ranode accepts | passed (`lsof`: RustDeskPublic owns 21118) |
+| ko.23 5: stopped-service line | not run: it needs the service toggled off in ranode on the only receiving Mac |
+| ko.23 6: `--set-permanent-password` (stdin, as the user, ranode running) | passed: `Done!`, exit 0, ranode logged "permanent-password updated" |
+| ko.23 7: one-time password refused; permanent password works | partly: two wrong passwords got "잘못된 비밀번호" and the permanent password worked; the one-time password itself cannot be read (ranode never shows it), so it was not tried |
+| ko.23 8: Tailscale off/on, tailnet switch | not run: never stop or switch Tailscale on these Macs |
+| ko.23 9: "RustDesk 없음" / "접속 불가" in the folded section | passed (m1m1, m1m2: "RustDesk 없음"; win-build, dns01, dns02, dns03: "접속 불가") |
+| ko.23 10: update card names "RustDesk (forked ranode)" | not observed: ko.24 is the first newer Latest; m5m2's ko.22 ranode was not restarted (owner's working Mac) |
+| ko.23 11: Tailscale IPv6; LAN 100.70.x alias refused | not run: the `rustdeskpublic://` link does not take an IPv6 address and ranode has no address field; the alias test would change a LAN host |
+| ko.24 1, 2 (Craft Mac by ID inside the office; office-range peer at the Tailscale IP) | not run: no Craft Mac has been cut over |
+| ko.24 3: own Mac, Tailscale IP works and click-accept is offered | passed: m5m1 showed the accept window ("수락") before the password was entered |
+| ko.24 4: card shows the ID; `--set-incoming-policy` | passed: card shows the ID (the main app's, kept), the Tailscale address, "비밀번호: 설정됨"; with ranode running exit 2, a public or Tailscale-range subnet exit 1, nothing stored; the printed policy line not run (it would store a policy on an owner Mac, where the procedure sets none) |
+| ko.24 5: grants survive a rebuild signed with the stable identity | not run: no internal build yet |
+| LAN address from another Mac | not concluded: m5m2's ranode failed to open TCP to m5m1's LAN address before reaching it (no log line on m5m1), while `nc` from m5m2 reached 21118; see `findings.md` |
 
 ## ko.23 release (2026-11-21)
 
@@ -55,43 +90,25 @@ still owns 21118. m5m2 keeps ranode ko.22.
 
 ## Remaining, in order
 
-1. **ko.23 incoming live checks, at the cutover of the first Mac** (the main app must have left
-   21118 there; never by stopping Tailscale on a Mac that carries SSH):
-   1. another tailnet Mac connects by this Mac's Tailscale IP + permanent password and controls it;
-   2. a connection through the public server (non-Tailscale address) is refused;
-   4. after quitting the main app and relaunching ranode, ranode accepts;
-   5. with the service stopped the card says "지금은 접속받지 않음 (서비스 중지됨)";
-   6. `--set-permanent-password` with the password on stdin sets it (exit 0);
-   7. a one-time password is refused; the permanent password works;
-   8. on a Mac where Tailscale may be stopped: turning Tailscale off shows "Tailscale이 꺼져
-      있습니다" within about 30 s, on again shows the list; a tailnet switch shows the new tailnet;
-   9. with the window unlocked, open "RustDesk 응답 없음": a Mac with RustDesk closed shows
-      "RustDesk 없음", a peer that drops 21118 shows "접속 불가";
-   10. with a newer Latest release, the update card names "RustDesk (forked ranode)";
-   11. another tailnet Mac connects by this Mac's Tailscale IPv6 address too; a LAN host given a
-       100.70.0.x alias is refused both at this Mac's LAN address and at its Tailscale IP routed
-       over the LAN (decision 0009).
-2. **Machine-setup cutover**, for each owner Mac: install ko.23 ranode;
-   grant it Screen Recording, Accessibility and Input Monitoring; quit and remove the main app
-   (and its LaunchAgent/LaunchDaemon where installed) before (re)starting ranode, because ranode retakes a busy 21118 only at its next start; start
-   ranode and add it as a login item; set the vault password with `--set-permanent-password`
-   (stdin, as the user, ranode running); verify from another tailnet Mac.
-3. Removal of the main app from the owner's Macs and the switch of their setup (permissions,
-   options, password) to ranode — done in the machine-setup repo.
-4. **ko.24 release** (public release on `m5m1`, or an internal build per operations "Internal
-   builds"), from the merge commit of PR #37: `cargo test --lib -- hangul_key fork_update
-   public_flavor updater` and `platform::macos` on a Mac, then on the signed ranode, after the
-   cutover (operations, "Cutover keeping the Mac's ID"):
-   1. Craft Mac: by the kept ID from inside the office, password only, no click offered (works on
-      upstream's LAN "intranet" TCP path; a WebRTC, KCP or relayed attempt is refused); by
-      Tailscale IP;
-   2. Craft Mac: by ID from outside the office → refused (relayed: refused before the relay
-      opens); an office-range peer sent to the Craft Mac's Tailscale IP → refused (decision 0009
-      addendum);
-   3. own Mac: Tailscale IP works and click-accept is offered;
-   4. the card shows the ID; `--set-incoming-policy` prints the expected line, exits 2 with ranode
-      running and 1 for a public subnet;
-   5. after a rebuild signed with the stable identity, the macOS grants are still on.
+1. **Machine setup follows the m5m1 cutover**: the machine-setup repo still lists m5m1 among the
+   Macs that keep the main app (dotfiles `fleet-app-watch.yaml` `rustdesk_main_macs` and README
+   "Which Macs run which app"; the k3s-prod `device-ops/fleet-app-watch` CronJob config), so its
+   daily check will report the missing main app on m5m1 until that list drops m5m1. The cutover
+   steps (operations "Cutover keeping the Mac's ID") are not yet a machine-setup script.
+2. **Cutover of the other owner Mac (m5m2)** by the same procedure, when the owner's open work
+   there allows a short stop of incoming connections; until then m5m2 keeps the main app.
+3. **Live checks still open** (from the ko.23 and ko.24 lists; done ones are in the table above):
+   1. with the service stopped the card says "지금은 접속받지 않음 (서비스 중지됨)";
+   2. on a Mac where Tailscale may be stopped: Tailscale off/on and a tailnet switch;
+   3. a newer Latest shows the update card naming "RustDesk (forked ranode)" (ranode ko.22/ko.23
+      at its next start);
+   4. another tailnet Mac connects by the Tailscale IPv6 address; a LAN host given a 100.70.0.x
+      alias is refused at the LAN address and at the Tailscale IP routed over the LAN;
+   5. Craft Mac: by the kept ID from inside the office, password only, no click offered; by
+      Tailscale IP; by ID from outside the office refused; an office-range peer sent to its
+      Tailscale IP refused (decision 0009 addendum);
+   6. `--set-incoming-policy` prints the effective policy line (on a Craft Mac, ranode quit);
+   7. after a rebuild signed with the stable internal identity, the macOS grants are still on.
 
 ## Blockers
 
