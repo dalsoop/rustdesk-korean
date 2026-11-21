@@ -223,8 +223,10 @@ class OnPremRustDeskMemos {
 enum OnPremSection { favorites, ready, directOff, checking, missing, offline }
 
 /// [rustDesk] is the device's RustDesk state now, or the remembered one while
-/// it is being checked again; null when nothing is known yet.
-OnPremSection onPremSectionOf(OnPremEntry entry, OnPremRustDesk? rustDesk) {
+/// it is being checked again; null when nothing is known yet. [noAnswer]: the
+/// checks finished and neither the port nor the probe answered.
+OnPremSection onPremSectionOf(OnPremEntry entry, OnPremRustDesk? rustDesk,
+    {bool noAnswer = false}) {
   if (entry.isFavorite) return OnPremSection.favorites;
   final device = entry.device;
   if (device == null) return OnPremSection.offline;
@@ -233,7 +235,7 @@ OnPremSection onPremSectionOf(OnPremEntry entry, OnPremRustDesk? rustDesk) {
   return switch (rustDesk) {
     OnPremRustDesk.directOff => OnPremSection.directOff,
     OnPremRustDesk.missing => OnPremSection.missing,
-    _ => OnPremSection.checking,
+    _ => noAnswer ? OnPremSection.missing : OnPremSection.checking,
   };
 }
 

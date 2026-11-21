@@ -47,12 +47,17 @@ them can listen at a time.
 
 1. `public_home.dart` asks `Tailscale.read()`; `tailscale.dart` finds the binary
    (`/Applications/Tailscale.app/Contents/MacOS/Tailscale`, then `PATH`, then `/opt/homebrew/bin`,
-   `/usr/local/bin`) and runs `status --json` and `switch --list` with a 5 s timeout.
-2. The JSON becomes `TailscaleState` (`notFound`, `notResponding`, `stopped`, `needsLogin`,
-   `needsApproval`, `running`) plus devices and profiles.
-3. For every device with an IPv4 the tab opens TCP to `<tailscale ip>:21118` (1.5 s); to each
-   online one it also sends a UDP discovery ping to 21119 through `mainPublicProbeRustdesk` to read the peer's RustDesk ID and hostname.
-4. The device lands in a section ("바로 접속", "직접 접속 꺼짐", "확인 중", "RustDesk 없음", "오프라인").
+   `/usr/local/bin`; the app bundle last while `/var/run/tailscaled.socket` exists) and runs
+   `status --json` and `switch --list` with a 5 s timeout. The page reads again every 5 s while
+   the on-prem tab waits for Tailscale, otherwise every 30 s and on coming to the front.
+2. Exit code, stdout and stderr become `TailscaleState` (`notFound`, `notResponding`,
+   `unreadable`, `stopped`, `connecting`, `otherUser`, `needsLogin`, `needsApproval`, `running`)
+   plus devices and profiles (a failed `switch --list` keeps the last profiles).
+3. For every device with an IPv4 the tab opens TCP to `<tailscale ip>:21118` (1.5 s: open,
+   refused or no answer); to each online one it also sends a UDP discovery ping to 21119 through
+   `mainPublicProbeRustdesk` to read the peer's RustDesk ID and hostname. A timed re-read repeats
+   this only for devices whose online state or IP changed.
+4. The device lands in a section ("바로 접속", "직접 접속 꺼짐", "확인 중", "RustDesk 응답 없음", "오프라인").
 5. A click connects to the device's current Tailscale IP as the peer id; the peer accepts because
    the IP is inside its whitelist and its direct server is on.
 

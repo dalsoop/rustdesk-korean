@@ -307,10 +307,25 @@ class PublicTailscaleGuide extends StatelessWidget {
           'Tailscale is not installed',
           'public_ts_install_tip'
         ),
+      TailscaleState.unreadable => (
+          Icons.help_outline,
+          'Could not read the Tailscale status',
+          'public_ts_unreadable_tip'
+        ),
       TailscaleState.stopped => (
           Icons.power_settings_new,
           'Tailscale is turned off',
           'public_ts_off_tip'
+        ),
+      TailscaleState.connecting => (
+          Icons.sync,
+          'Tailscale is connecting',
+          'public_ts_connecting_tip'
+        ),
+      TailscaleState.otherUser => (
+          Icons.people_outline,
+          'Tailscale is in use by another user',
+          'public_ts_other_user_tip'
         ),
       TailscaleState.needsLogin => (
           Icons.login,
@@ -330,7 +345,9 @@ class PublicTailscaleGuide extends StatelessWidget {
     };
     final canOpenApp = state == TailscaleState.stopped ||
         state == TailscaleState.needsLogin ||
-        state == TailscaleState.notResponding;
+        state == TailscaleState.notResponding ||
+        state == TailscaleState.unreadable ||
+        state == TailscaleState.otherUser;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -389,13 +406,15 @@ class PublicTailscaleGuide extends StatelessWidget {
   }
 }
 
-enum PublicPeerProblem { directOff, missing, offline }
+// noAnswer: online in Tailscale, but neither its port nor its RustDesk answered.
+enum PublicPeerProblem { directOff, missing, noAnswer, offline }
 
 /// Says why [deviceName] cannot take a connection and what to do about it.
 void showPublicPeerHelp(String deviceName, PublicPeerProblem problem) {
   final tip = switch (problem) {
     PublicPeerProblem.directOff => 'public_direct_off_help',
     PublicPeerProblem.missing => 'public_missing_help',
+    PublicPeerProblem.noAnswer => 'public_no_answer_help',
     PublicPeerProblem.offline => 'public_offline_help',
   };
   gFFI.dialogManager.show((setState, close, context) {

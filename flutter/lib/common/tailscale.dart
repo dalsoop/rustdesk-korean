@@ -11,21 +11,29 @@ const Duration kTailscaleSwitchTimeout = Duration(seconds: 20);
 
 const String _kTailscaleAppBinary =
     '/Applications/Tailscale.app/Contents/MacOS/Tailscale';
+const String _kTailscaledSocket = '/var/run/tailscaled.socket';
 // GUI apps get a minimal PATH, so a Homebrew CLI would not be found through it.
 const List<String> _kExtraBinaryDirs = ['/opt/homebrew/bin', '/usr/local/bin'];
 
 // notFound: no Tailscale binary on this Mac. notResponding: the binary is
 // there but did not answer in time (for example while the app restarts).
+// unreadable: it answered with something that is not a known status.
+// connecting: `Starting` or `NoState`, as after a wake, a network change or a
+// restart of its service. otherUser: another user of this computer holds it.
 enum TailscaleState {
   notFound,
   notResponding,
+  unreadable,
   stopped,
+  connecting,
+  otherUser,
   needsLogin,
   needsApproval,
   running
 }
 
-enum RustDeskReachability { checking, reachable, unreachable }
+// closed: the peer answered and refused the port. unreachable: no answer.
+enum RustDeskReachability { checking, reachable, closed, unreachable }
 
 class TailscaleProfile {
   final String id;
@@ -113,6 +121,10 @@ class TailscaleStatus {
       TailscaleStatus(state: TailscaleState.notFound, devices: []);
   static const notResponding =
       TailscaleStatus(state: TailscaleState.notResponding, devices: []);
+  static const unreadable =
+      TailscaleStatus(state: TailscaleState.unreadable, devices: []);
+  static const stopped =
+      TailscaleStatus(state: TailscaleState.stopped, devices: []);
 }
 
 class TailscaleSnapshot {
@@ -159,22 +171,25 @@ List<TailscaleProfile> parseTailscaleProfiles(String output) {
   return profiles;
 }
 
-/// Parses `tailscale status --json`. Returns [TailscaleStatus.notFound] when
-/// the text is not a status object.
+/// Parses `tailscale status --json`. Returns [TailscaleStatus.unreadable] when
+/// the text is not a status object or its state is not one this app knows.
 TailscaleStatus parseTailscaleStatusJson(String output) {
   final Object? decoded;
   try {
     decoded = jsonDecode(output);
   } catch (_) {
-    return TailscaleStatus.notFound;
+    return TailscaleStatus.unreadable;
   }
-  if (decoded is! Map<String, dynamic>) return TailscaleStatus.notFound;
+  if (decoded is! Map<String, dynamic>) return TailscaleStatus.unreadable;
 
   final state = switch (decoded['BackendState']) {
     'Running' => TailscaleState.running,
+    'Stopped' => TailscaleState.stopped,
+    'Starting' || 'NoState' => TailscaleState.connecting,
+    'InUseOtherUser' => TailscaleState.otherUser,
     'NeedsLogin' => TailscaleState.needsLogin,
     'NeedsMachineAuth' => TailscaleState.needsApproval,
-    _ => TailscaleState.stopped,
+    _ => TailscaleState.unreadable,
   };
 
   final self = decoded['Self'];
@@ -205,6 +220,7 @@ TailscaleStatus parseTailscaleStatusJson(String output) {
       ));
     }
   }
+  _nameSharedInDuplicatesInFull(devices, _dnsName(decoded['MagicDNSSuffix']));
   devices.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   return TailscaleStatus(
       state: state,
@@ -221,6 +237,37 @@ String _deviceName(Map<String, dynamic> peer) {
     if (label.isNotEmpty) return label;
   }
   return (peer['HostName'] as String?) ?? '';
+}
+
+// Names are unique inside a tailnet, but a device shared in from another
+// tailnet can carry the same first label as one of ours. Such a device is
+// named by its full DNS name, so the two never share a card, a favourite or a
+// remembered check; this tailnet's devices keep their short names.
+void _nameSharedInDuplicatesInFull(
+    List<TailscaleDevice> devices, String ownSuffix) {
+  final counts = <String, int>{};
+  for (final d in devices) {
+    counts[d.name] = (counts[d.name] ?? 0) + 1;
+  }
+  for (var i = 0; i < devices.length; i++) {
+    final d = devices[i];
+    if ((counts[d.name] ?? 0) < 2 || d.dnsName.isEmpty) continue;
+    if (ownSuffix.isNotEmpty && d.dnsName.endsWith('.$ownSuffix')) continue;
+    devices[i] = TailscaleDevice(
+      id: d.id,
+      name: d.dnsName,
+      os: d.os,
+      online: d.online,
+      ipv4: d.ipv4,
+      dnsName: d.dnsName,
+      ips: d.ips,
+      curAddr: d.curAddr,
+      relay: d.relay,
+      lastSeen: d.lastSeen,
+      owner: d.owner,
+      tags: d.tags,
+    );
+  }
 }
 
 String? _firstIpv4(Object? ips) {
@@ -266,16 +313,46 @@ Map<String, String> tailscaleCliEnvironment(Map<String, String> inherited) {
   return {...inherited, 'TERM': 'dumb'};
 }
 
+/// The state `tailscale status --json` reported. Output that is not a status
+/// is "unreadable", except the CLI's own message that it could not reach the
+/// Tailscale service, which means Tailscale is not running.
+TailscaleStatus tailscaleStatusFromCli(
+    int exitCode, String stdout, String stderr) {
+  TailscaleStatus status;
+  try {
+    status = parseTailscaleStatusJson(stdout);
+  } catch (_) {
+    status = TailscaleStatus.unreadable;
+  }
+  if (status.state != TailscaleState.unreadable || exitCode == 0) {
+    return status;
+  }
+  final err = stderr.toLowerCase();
+  if (err.contains('failed to connect to local') &&
+      !err.contains('appears to be running')) {
+    return TailscaleStatus.stopped;
+  }
+  return status;
+}
+
 class _CommandResult {
   final int exitCode;
   final String stdout;
+  final String stderr;
 
-  const _CommandResult(this.exitCode, this.stdout);
+  const _CommandResult(this.exitCode, this.stdout, this.stderr);
 }
 
 class Tailscale {
   static String? findBinary() {
-    if (File(_kTailscaleAppBinary).existsSync()) return _kTailscaleAppBinary;
+    final appExists = File(_kTailscaleAppBinary).existsSync();
+    // The open-source tailscaled (Homebrew) answers on this socket, which the
+    // app's own CLI does not use; a leftover app must not hide it.
+    if (appExists &&
+        FileSystemEntity.typeSync(_kTailscaledSocket) ==
+            FileSystemEntityType.notFound) {
+      return _kTailscaleAppBinary;
+    }
     final pathDirs = (Platform.environment['PATH'] ?? '')
         .split(':')
         .where((d) => d.isNotEmpty);
@@ -283,7 +360,7 @@ class Tailscale {
       final candidate = '$dir/tailscale';
       if (File(candidate).existsSync()) return candidate;
     }
-    return null;
+    return appExists ? _kTailscaleAppBinary : null;
   }
 
   /// Null when the binary is missing, cannot start, fails or does not answer
@@ -303,10 +380,14 @@ class Tailscale {
         .transform(const Utf8Decoder(allowMalformed: true))
         .join()
         .catchError((_) => '');
-    process.stderr.drain<void>().catchError((_) {});
+    final stderr = process.stderr
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .join()
+        .catchError((_) => '');
     try {
       final code = await process.exitCode.timeout(timeout);
-      return _CommandResult(code, await stdout.timeout(timeout));
+      return _CommandResult(code, await stdout.timeout(timeout),
+          await stderr.timeout(timeout));
     } catch (_) {
       _stop(process);
       return null;
@@ -325,30 +406,22 @@ class Tailscale {
         .catchError((_) => -1);
   }
 
-  static Future<List<TailscaleProfile>> listProfiles() async {
+  /// Null when the list could not be read (no answer, an error, or a CLI
+  /// without `switch --list`).
+  static Future<List<TailscaleProfile>?> listProfiles() async {
     final result = await _run(['switch', '--list'], kTailscaleCommandTimeout);
-    if (result == null || result.exitCode != 0) return [];
+    if (result == null || result.exitCode != 0) return null;
     return parseTailscaleProfiles(result.stdout);
   }
 
-  /// A binary that runs but prints no status object counts as stopped; a
-  /// missing one as not found; one that does not answer in time as not
-  /// responding.
+  /// A missing binary is not found; one that does not answer in time is not
+  /// responding; one that answers is read by [tailscaleStatusFromCli].
   static Future<TailscaleStatus> readStatus() async {
     if (findBinary() == null) return TailscaleStatus.notFound;
     final result = await _run(['status', '--json'], kTailscaleCommandTimeout);
     if (result == null) return TailscaleStatus.notResponding;
-    TailscaleStatus status;
-    try {
-      status = parseTailscaleStatusJson(result.stdout);
-    } catch (_) {
-      // It answered, with output this app cannot read: not "not responding".
-      status = TailscaleStatus.notFound;
-    }
-    if (status.state == TailscaleState.notFound) {
-      return const TailscaleStatus(state: TailscaleState.stopped, devices: []);
-    }
-    return status;
+    return tailscaleStatusFromCli(
+        result.exitCode, result.stdout, result.stderr);
   }
 
   static Future<TailscaleSnapshot>? _reading;
@@ -373,9 +446,14 @@ class Tailscale {
   static Future<TailscaleSnapshot> _read() async {
     final results = await Future.wait([readStatus(), listProfiles()]);
     final status = results[0] as TailscaleStatus;
+    // A list read that failed keeps the last list, so favourites and the
+    // tailnet name do not vanish for one read.
+    final profiles = results[1] as List<TailscaleProfile>? ??
+        latest.value?.profiles ??
+        const <TailscaleProfile>[];
     final snapshot = TailscaleSnapshot(
       state: status.state,
-      profiles: results[1] as List<TailscaleProfile>,
+      profiles: profiles,
       devices: status.devices,
       selfIpv4: status.selfIpv4,
     );
@@ -410,8 +488,18 @@ class Tailscale {
           await Socket.connect(ip, kRustDeskDirectPort, timeout: timeout);
       socket.destroy();
       return RustDeskReachability.reachable;
+    } on SocketException catch (e) {
+      // A refusal comes from the peer itself: it is up, the port is closed.
+      // A timeout or any other error says nothing about RustDesk there.
+      return _isConnectionRefused(e.osError?.errorCode)
+          ? RustDeskReachability.closed
+          : RustDeskReachability.unreachable;
     } catch (_) {
       return RustDeskReachability.unreachable;
     }
   }
 }
+
+/// ECONNREFUSED on macOS, Linux and Windows.
+bool _isConnectionRefused(int? errorCode) =>
+    errorCode == 61 || errorCode == 111 || errorCode == 10061;
