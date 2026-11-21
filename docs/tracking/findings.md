@@ -2,9 +2,32 @@ This file is written in English only.
 
 # Findings
 
-## Unmerged branches kept after the 2026-11-21 cleanup
+## Unmerged branches kept after the 2026-11-21 and 2026-11-22 cleanups
 
-- Condition: on 2026-11-21 (owner's go-ahead in session m5m1: "그거 pr 이랑 이슈 다 해소했나봐봐")
+- State on 2026-11-22 (owner's word "진행", session m5m1): 10 more remote branches were deleted, so
+  the remote holds only the default branch, the release branches tied to tags (`release/ko.9`,
+  `release/ko.10`, `release/ko19`, `release/ko23`, whose merge commits carry `1.5.0-ko.9`,
+  `1.5.0-ko.10`, `1.5.0-ko.20` and `1.5.0-ko.23`) and three branches kept on purpose:
+  - `fix-texture-lifetime` (24a16d9a): its upstream PR #15851 is still open.
+  - `keyboard-shortcuts` (fe93cbe5): upstream #14933 is merged and arrives with the next upstream
+    sync; delete it then.
+  - `fix/wayland-pipewire-latch` (b2612262): a fork-authored fix never proposed upstream; keep it
+    until someone decides whether to propose it.
+
+  Deleted on 2026-11-22 (restore with `git push origin <sha>:refs/heads/<branch>`; also in
+  `~/tmp/rdk-hygiene/deleted-branches-20261122.tsv` on m5m1):
+  `auto-update-webpki-roots` 18f5f72bf4ce1f6ee0ec8cf765431b7137ae88c5 (bot commit of the disabled
+  "Update webpki-roots" workflow), `dxgi-reuse-staging-texture`
+  9343affe0bf90110a494134a8076c4060d41bbd5, `fix-unzoomed-cursor-dpi`
+  8da629c57de7baf97127448089100cd75e8cb939, `fix/16073-ipc-exe-check-eacces`
+  9dd427d49fb903c7a664ad412267d8cb495cd939 and `svt-av1` e17efa947477f9eaf0fcb9d1cb013732fb38811a
+  (each: upstream PR closed without merge), `sciterjs` e86d0a0fc14f0bff4cb1ecd94a84eae42818da80
+  (2022 upstream branch, unused), and, fully merged into the default branch with their PRs merged,
+  `docs/ko23-released` e416681a80c82289a0846bb063668e6e09729b04,
+  `feat/ko24-ranode-id-incoming` c68083f85fa63a0cb38eb091b282b49edd09c13c,
+  `fix/qa-public-client` 28e801def0ed25a0af9ff4072a335ec6736fcea0,
+  `fix/qa-ranode-incoming` f7372b66712fe644212243bc70fc1cb2429cdb05.
+- Earlier state, 2026-11-21 (owner's go-ahead in session m5m1: "그거 pr 이랑 이슈 다 해소했나봐봐")
   33 remote branches were deleted: every branch fully merged into the default branch, and six
   unmerged ones whose content is superseded by merged work (list below). PR #19 was already closed
   (2026-11-12). 14 branches remain: the default branch; `release/ko.9` and `release/ko.10` (merged
@@ -20,10 +43,10 @@ This file is written in English only.
     `svt-av1` (#15656 closed), `sciterjs` (2022, no merged PR), `keyboard-shortcuts` (upstream #14933
     merged, but that merge is not in the default branch yet).
 - Blast radius: an agent may still pick one of these as a base.
-- Why not now: none is superseded by something merged, so deleting them needs a decision on each.
-- Approach: decide per branch (the webpki-roots bot branch can go once a sync brings upstream's
-  roots; `fix/wayland-pipewire-latch` needs a keep-or-drop decision); `keyboard-shortcuts` can go
-  once an upstream sync contains #14933.
+- Why not now: each of the three kept branches still waits on something outside this fork.
+- Approach: delete `keyboard-shortcuts` once an upstream sync contains #14933 and
+  `fix-texture-lifetime` once upstream #15851 is closed or merged; decide whether to propose
+  `fix/wayland-pipewire-latch` upstream, then drop or keep it.
 - Restore record of the deleted branches (`git push origin <sha>:refs/heads/<branch>`; also in
   `~/tmp/rdk-hygiene/deleted-branches.tsv` on m5m1). Merged into the default branch:
   `ci/desktop-build-cache` b20dcbdee63cad0c39ef826229e7ec5a479df6b1,
@@ -63,6 +86,20 @@ This file is written in English only.
   `temporary-password-rotates-at-authorization` 2637003859127891a0dcf369fd3e0d25f67cc494 (earlier
   iterations of upstream #16033 / #16080, merged later as 58ff78a8 / d4ac2c07, in the default
   branch).
+
+## ranode on m5m2 could not open a connection to a LAN address
+
+- Condition: during the m5m1 cutover checks (2026-11-22), ranode ko.22 on m5m2 opened
+  `rustdeskpublic://connection/new/<m5m1's LAN address>` twice and showed
+  "Failed to connect to <address>:21118" without reaching m5m1 (ranode there logged no
+  incoming connection), while `nc` from an SSH session on m5m2 reached the same port. Likely
+  macOS Local Network privacy for the GUI app on m5m2 (not checked), or a client-side path choice.
+- Blast radius: none for security (the receiving side never saw the attempt); the check "a LAN
+  address of the receiving Mac is refused by the whitelist" stays unproven from a GUI client.
+- Why not now: m5m2 is the owner's working Mac; its privacy settings were not changed.
+- Approach: at the next live check, run the LAN-address attempt from a Mac whose ranode has Local
+  Network access, and look for "Your ip is blocked by the peer" on the client and the refusal on
+  the receiving Mac.
 
 ## The msi fix for error 2866 is not checked on a Windows PC
 
