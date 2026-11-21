@@ -30,12 +30,15 @@ This file is written in English only.
   port-check timeout is "접속 불가", never a remembered "RustDesk 없음"; shared-in devices with a
   duplicate short name; Homebrew `tailscaled` preferred over a leftover app; Korean wording; the
   update card's app name. Flutter tests passed on m5m1 (54); the live checks are in item 1 below.
+- msi Cancel fix (issue #10, error 2866) and the signing script's LaunchServices cleanup: merged
+  for the next release; the msi builds in CI, the Windows PC check and the first real signing run
+  are open in `findings.md`.
 
 ## Remaining, in order
 
 1. **ko.23 release**: on the release Mac `m5m1`, from the merge commit of
-   the ko.23 PR (`version: 1.5.0+6823`): run `cargo test --lib public_flavor` (must pass; first
-   time these tests compile), build both macOS apps, sign, then on the signed ranode check:
+   the ko.23 PR (`version: 1.5.0+6823`): run `cargo test --lib public_flavor` (must pass; passed at
+   223d2e56), build both macOS apps, sign, then on the signed ranode check:
    1. another tailnet Mac connects by this Mac's Tailscale IP + permanent password and controls it;
    2. a connection through the public server (non-Tailscale address) is refused;
    3. with the main app running, ranode works outgoing and does not take 21118;
