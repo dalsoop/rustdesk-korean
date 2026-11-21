@@ -47,11 +47,11 @@ Not this module's scope: upstream's protocol, codecs, server services, `libs/hbb
   office subnet, ko.24) is accepted only when the local address is in that same subnet, assigned
   to a non-tunnel interface (not `utun*`, `tailscale*`, `ipsec*`, `ppp*`), and is the source
   address of the route back to the peer (`office_path_allowed`). It never widens what the
-  whitelist allows.
+  whitelist allows. Interfaces come from getifaddrs (`interface_addresses`), not `default_net`,
+  which also probes gateways.
 - `relayed_incoming_allowed` (hook in `server::create_relay_connection_`, ko.24): ranode refuses
   every relayed incoming connection before opening it; a relayed peer address is only the
-  rendezvous message's claim, which no address rule can check (decision 0009 addendum). Interfaces come from
-  getifaddrs (`interface_addresses`), not `default_net`, which also probes gateways.
+  rendezvous message's claim, which no address rule can check (decision 0009 addendum).
 - `listen_direct`: ranode on macOS binds 21118 without `SO_REUSEPORT`, so a port another app
   holds fails (card: busy); every other build calls upstream's `listen_any`.
 - `cleanup_once()` touches only own-server keys and ids containing `@rustdesk.internal.kr`, once.

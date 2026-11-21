@@ -67,6 +67,8 @@ pass the office rule (and, when the relay socket runs through a Tailscale exit n
 address would pass the rule above). ranode therefore refuses every relayed incoming connection
 before it opens the relay (`relayed_incoming_allowed`, a one-line hook in
 `server::create_relay_connection_`). No legitimate peer is lost: a relayed peer's real address is
-public and the whitelist refused it anyway. Every other path (direct listener, LAN intranet accept,
-TCP punch, KCP over a connected UDP socket) carries the address the socket actually talks to;
-WebRTC has local `0.0.0.0` and fails both rules.
+public and the whitelist refused it anyway. The direct listener, the LAN intranet accept, the TCP
+punch and the IPv4 KCP punch (a UDP socket connected to the peer, then a key exchange a blind
+sender cannot finish) carry the address the socket actually talks to. The IPv6 KCP path passes the
+claimed IPv4 address, but its local address is a global IPv6 one, so both rules refuse any
+Tailscale or office claim there; WebRTC has local `0.0.0.0` and fails both rules the same way.

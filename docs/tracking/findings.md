@@ -78,16 +78,18 @@ This file is written in English only.
   2866 appears in the MsiInstaller events; `msiexec /i <msi> /qn` still fails with the
   `BlockSelfInstalledApp` message in the log. Do not uninstall someone's existing RustDesk to test.
 
-## The signing script's LaunchServices cleanup is not yet seen in a real signing run
+## A "RustDesk 없음" memo written before ko.23 outlives a timing-out device
 
-- Condition: `res/osx-sign-notarize.sh` now unregisters its stage copy (`lsregister -u`) in the
-  exit trap (2026-11-21; before, each run left a dead record per bundle id). Checked on m5m1 only
-  with a dummy bundle and an early-failing run, not with a real sign and notarize.
-- Blast radius: if a record still survives, `open -b`, Gujo Cloud Apps or `rustdeskpublic://`
-  links can resolve to a missing copy, as before.
-- Why not now: the next real run is the next release.
-- Approach: after the next release's two signing runs on m5m1, `lsregister -dump` shows no path
-  under `~/tmp/osx-sign.*`; then remove this entry.
+- Condition: up to ko.22 a port check that timed out was remembered as "RustDesk 없음"
+  (`public-onprem-rustdesk-memos`). ko.23 never remembers a timeout, but it also does not clear
+  such an old memo, so the device shows "RustDesk 없음" again while each new check runs, then
+  "접속 불가". Seen on m5m1 on 2026-11-21: `win-build` (port 21118 times out) still had the memo
+  `missing` after ko.23 ran.
+- Blast radius: cosmetic, for a few seconds per check, on Macs that ran ko.22 or earlier.
+- Why not now: clearing it means changing the memo rules (new state handling); found during the
+  ko.23 release.
+- Approach: when the memo code is next touched, drop a device's memo when its check ends
+  `unreachable`; until then the memo is overwritten as soon as the device answers or refuses.
 
 ## Stale "owner's own server" claims about the main app
 
@@ -106,10 +108,21 @@ This file is written in English only.
   connection arrives on the Mac's own address in that subnet on a non-tunnel interface, with the
   route back through it (the decision 0009 rule applied to the subnet). A private range does not
   prove which LAN it is: on another network with the same numbering, devices that know the Mac's
-  permanent password could connect.
-- Blast radius: only a Craft Mac moved out of the office onto such a network; the owner's own
-  Macs list no office subnet. The permanent password is still required (approve mode `password`).
+  permanent password could connect. Virtual interfaces other than `utun*`, `tailscale*`, `ipsec*`
+  and `ppp*` (`bridge*` of VMs, `gif*`, `stf*`) count as LAN for this rule.
+- Blast radius: only a Craft Mac moved out of the office onto such a network, or an office subnet
+  that overlaps a VM bridge; the owner's own Macs list no office subnet. The permanent password is
+  still required (approve mode `password`).
 - Why not now: binding the subnet to one network (gateway MAC, Wi-Fi SSID) needs new state; the
   Craft Macs are fixed office Macs.
 - Approach: revisit if a Craft Mac ever leaves the office; the machine setup can clear the subnet
   with `--set-incoming-policy --extra-subnets none`.
+
+## A refused relay makes the controller wait for its timeout
+
+- Condition: from ko.24 ranode refuses relayed incoming in `create_relay_connection_`, after
+  upstream has already answered the rendezvous server; the controller waits for its relay timeout
+  instead of seeing "Your ip is blocked by the peer", and each refusal logs one error line.
+- Blast radius: cosmetic (no access is granted); repeated attempts add log lines.
+- Why not now: failing faster means changing upstream's relay handshake in `rendezvous_mediator.rs`.
+- Approach: leave as is unless the log volume becomes a problem.
