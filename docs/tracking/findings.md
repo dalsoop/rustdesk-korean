@@ -2,20 +2,6 @@ This file is written in English only.
 
 # Findings
 
-## Where the release Macs are is not recorded
-
-- Condition (2026-11-17): releases up to ko.21 were built and signed on a Mac with the toolchain
-  under `~/work/sdk` (paths embedded in the ko.21 binaries; Developer ID signature time 15:13 KST).
-  The company Mac Studio with the same host and user name has no `~/work/sdk`, no SOPS checkout and
-  no age key, so the release Mac is a different machine, most likely on the owner's personal
-  tailnet, and the agents that set up company machines cannot reach it.
-- Blast radius: an agent planning a release cannot tell which Mac or session builds and signs, and
-  may wrongly conclude that releases are blocked (this happened on 2026-11-17).
-- Why not now: which Mac this is, and whether its keys sit in personal stores, is for the owner to
-  confirm; nothing was moved.
-- Approach: the owner confirms the release Mac and its tailnet; the role binding is then written
-  where the owner keeps the device table, and this item closes.
-
 ## Obsolete Android workflows can still be run
 
 - Condition: `sign-apk.yml` (manual trigger) signs with a throwaway keystore (password 123456) and
@@ -34,7 +20,7 @@ This file is written in English only.
 - Blast radius: regressions in the Rust key mapping, ranode core and update check reach the default
   branch unnoticed.
 - Why not now: a Rust test job needs the vcpkg/toolchain setup of the desktop build; not part of the
-  Finder fix (ko.22).
+  Finder fix (ko.22, released 2026-11-21).
 - Approach: add a `cargo test --lib` job for the fork modules in a separate change.
 
 ## Upstream scheduled workflows fail on the fork
@@ -54,3 +40,14 @@ This file is written in English only.
 - Blast radius: an agent may pick an old branch as a base.
 - Why not now: deleting branches cannot be undone; PR #19 is closed when the ko.22 fix merges.
 - Approach: the owner approves a list of branches to delete.
+
+## The macOS signing script leaves LaunchServices records behind
+
+- Condition (2026-11-17, again 2026-11-21): `res/osx-sign-notarize.sh` copies the app to a stage
+  folder under `~/tmp/osx-sign.*`, which macOS registers with LaunchServices, and deletes the folder
+  on exit without unregistering it. Each run leaves a dead record per bundle id (two after ko.22;
+  removed by hand with `lsregister -u`).
+- Blast radius: a stale record with the installed app's bundle id can make `open -b`, Gujo Cloud
+  Apps or `rustdeskpublic://` links resolve to a missing or unsigned copy.
+- Why not now: a script change is outside a release; the records were cleaned after the run.
+- Approach: unregister the stage copy (`lsregister -u`) in the script's exit trap.
