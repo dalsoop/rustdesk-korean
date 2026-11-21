@@ -24,7 +24,10 @@ rustdesk-korean/
 ├── build.py / build.rs            → flavor switch (RUSTDESK_FLAVOR), ko release number, macOS branding
 ├── res/
 │   ├── osx-sign-notarize.sh       → macOS sign + notarize + zip (signing Mac only)
-│   └── android-sign-release.sh    → Android APK signing with the pinned certificate
+│   ├── android-sign-release.sh    → Android APK signing with the pinned certificate
+│   ├── release-ko.py              → release driver: commit → GitHub release 1.5.0-ko.N (release Mac only)
+│   ├── release-ko-build-macos.sh  → both macOS apps of one commit, run by the driver through the build queue
+│   └── release-notes/             → optional per-release notes (`1.5.0-ko.N.md`) the driver publishes
 ├── .github/workflows/
 │   ├── build-desktop-ko.yml       → Windows/Linux x64 builds on push to the default branch
 │   ├── flutter-unit-test.yml      → 5 fork Flutter test files (Korean input, ranode) on push and PRs

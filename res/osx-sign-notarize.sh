@@ -34,6 +34,9 @@ cleanup() {
   rm -rf "$tmp"
 }
 trap cleanup EXIT
+# A stopped run (the release driver's timeout, launchd) still removes the decrypted keys.
+trap 'exit 143' TERM
+trap 'exit 130' INT HUP
 
 out=$(dirname "$zip")
 mkdir -p "$out"

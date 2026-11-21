@@ -19,6 +19,24 @@ This file is written in English only.
 
 - Nothing.
 
+## Automatic release (2026-11-22)
+
+From ko.25 a merged version bump is released without a person: the m5m1 watch job (machine-setup
+repo, `rustdesk-release-watch`) runs `res/release-ko.py` on the branch head (docs/operations.md
+"Release ko.N"). Owner's word: "진행" (2026-11-22, session m5m1). Checked on m5m1 against the ko.24
+commit 6b6ed6c7 without publishing:
+
+| Check | Result |
+|---|---|
+| `--dry-run 6b6ed6c7` from scratch (Windows/Linux from run 44871878795, APK from upstream-mono job 18247266755 found by the `rustdesk/` tree, both macOS apps built through the build queue and signed/notarized) | exit 0; both zips CFBundleVersion 6824, team V2Z46YY386, "Notarized Developer ID", stapled; APK versionCode 8824 with the pinned certificate; deb `1.5.0+ko24`; source tree 09c49132 (as released); APK, exe, msi and deb byte-identical to the published ko.24 files (the zips differ only by their new signatures) |
+| `--draft-only --release-tag 1.5.0-ko.24-autotest` | exit 0: draft on 6b6ed6c7, 12 files uploaded, GitHub sha256 equal to ours; LaunchServices clean; TCP 21118 still owned by the receiving ranode (same pid); a second run uploaded nothing; the draft was deleted (no tag left, Latest still ko.24) |
+| release mode on 6b6ed6c7 | "already released", published release verified |
+| a commit from inside merged PR #37 (c68083f8) | refused (exit 2): not a first-parent commit |
+| watch job decision with the branch at ko.24 | "1.5.0-ko.24 is released", nothing run |
+
+The UI check of the new ranode is skipped by design on m5m1 (its ranode receives remote sessions;
+operations explains why); the live checks follow the machine-setup install of each release.
+
 ## ko.24 release and m5m1 cutover (2026-11-22)
 
 Release `1.5.0-ko.24` on 6b6ed6c7 (merge of PR #37; `version: 1.5.0+6824`), marked Latest after the

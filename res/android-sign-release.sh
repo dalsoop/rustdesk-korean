@@ -68,6 +68,9 @@ mkdir -p "$HOME/tmp"
 tmp=$(mktemp -d "$HOME/tmp/android-sign.XXXXXX")
 chmod 700 "$tmp"
 trap 'rm -rf "$tmp"' EXIT
+# A stopped run (the release driver's timeout, launchd) still removes the keystore.
+trap 'exit 143' TERM
+trap 'exit 130' INT HUP
 
 # printf is a shell builtin: the keystore never appears on a command line.
 printf '%s' "$UPSTREAM_MONO_RELEASE_KEYSTORE_JKS_B64" | base64 -d >"$tmp/release.jks"

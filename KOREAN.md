@@ -233,6 +233,8 @@ Tailscale is optional (from ko.18). The app shows the on-prem tab only when Tail
 
 RustDesk 프로토콜 버전(`Cargo.toml` 의 `1.5.0`)은 원본과 같게 둡니다. 다른 RustDesk 와 접속할 때 쓰는 값이라서입니다.
 
+From 2026-11-22 the steps below run by themselves on the release Mac m5m1 once the version PR is merged (`res/release-ko.py`, started by a watch job on m5m1; docs/operations.md "Release ko.N"). They stay here as the reference of what the release does.
+
 순서:
 1. `version:` 줄의 끝 두 자리를 올리는 PR 을 기본 브랜치에 병합합니다.
 2. macOS: build on the release Mac m5m1 (from ko.22; earlier releases were built on m5m2) and sign and notarize there with the Developer ID (V2Z46YY386) (bundle id `com.carriez.rustdesk` unchanged). Build `RUSTDESK_FLAVOR=public` from the same commit so RustDesk Public ships with it. Sign, notarize and zip with `res/osx-sign-notarize.sh <built .app> <name inside the zip> <zip>`.
