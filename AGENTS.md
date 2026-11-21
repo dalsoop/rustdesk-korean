@@ -8,7 +8,7 @@ the main app "RustDesk (for korean)" (accepts incoming connections; to be remove
 Macs) and the second app "RustDesk (forked ranode)" (on-prem tab over Tailscale, internet tab over
 the public RustDesk server, and from ko.23 also incoming from the tailnet; from ko.24 also by its
 RustDesk ID, through the same per-Mac whitelist). Users: the owner's Macs, the office Linux server, the owner's Android phone.
-Releases are public GitHub prereleases/releases; from ko.23 macOS builds may also ship as internal
+Releases are public GitHub prereleases/releases; from ko.24 macOS builds may also ship as internal
 builds installed only on the owner's and the company's Macs. Nobody outside those devices is a target.
 Nothing goes back upstream; upstream changes are merged in. Everything below this fork section,
 from "# RustDesk Guide" on, is upstream's guide and stays byte-identical to upstream.
@@ -61,7 +61,8 @@ rustdesk-korean/
   connection arrives on this Mac's Tailscale interface, decision 0009), plus the office subnet on
   the company Craft Macs (set per Mac by the machine setup; from ko.24 only when the connection
   arrives on this Mac's own address in that subnet on a non-tunnel interface, the same rule);
-  never from a public address. No change may open a device to the internet.
+  never from a public address, and ranode never through a relay. No change may open a device to
+  the internet.
 - The owner's personal release keys (Developer ID, notary key, Android key) never go into CI, a
   company store or the repo. The stable internal signing identity is a machine-setup build asset
   kept only in the vault and the build Mac's keychain, never in the repo or CI.

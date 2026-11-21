@@ -87,8 +87,10 @@ Option `enable-input-source-toggle`, default **on** (turned off only with
   decision 0009 rule applied to the office subnet).
 - ID connections (from ko.24): ranode is reached by its RustDesk ID through the public server
   (decision 0007); the whitelist checks the peer's own address, so an ID connection succeeds only
-  where the path is direct from an allowed network (inside the office on a Craft Mac). A relayed
-  peer arrives with its public address and is refused. Outside the office only the Tailscale IP works.
+  where the path is direct from an allowed network (inside the office on a Craft Mac; in practice
+  upstream's LAN "intranet" TCP path). ranode refuses every relayed incoming connection before
+  opening it, because a relayed peer's address is only the server's claim (decision 0009
+  addendum). Outside the office only the Tailscale IP works.
 - ranode's left pane "이 Mac에 접속받기" shows this Mac's RustDesk ID with a copy button (from ko.24;
   only once the ID is known, never "Generating ..."), its Tailscale IPv4 (from the latest Tailscale
   read, refreshed at least every 30 s on every tab; from ko.24 "Tailscale이 꺼져 있어 Tailscale

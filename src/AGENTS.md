@@ -13,7 +13,8 @@ refusal, hotkey tests), `flutter_ffi.rs` (`main_is_public_flavor`, `main_public_
 `main_public_direct_port_busy`,
 `session_set_remote_keyboard_active`, `main_init_input_source` which restores the Mac's hotkeys
 after a crash, the `local-hangul-keys-status` option), `server/connection.rs` (`on_open`:
-`public_flavor::incoming_path_allowed` after the whitelist), `rendezvous_mediator.rs`
+`public_flavor::incoming_path_allowed` after the whitelist), `server.rs`
+(`create_relay_connection_`: `public_flavor::relayed_incoming_allowed` first), `rendezvous_mediator.rs`
 (`direct_server`: `public_flavor::listen_direct` in place of `listen_any`, and
 `public_flavor::set_direct_listener` on bind success and failure), the fork keys appended to
 every `lang/*.rs`,
@@ -44,8 +45,12 @@ Not this module's scope: upstream's protocol, codecs, server services, `libs/hbb
   fd7a:115c:a1e0::/48 address, and is the source address of the route back to the peer
   (decision 0009). A peer address in one of the private subnets of the enforced whitelist (the
   office subnet, ko.24) is accepted only when the local address is in that same subnet, assigned
-  to a non-tunnel interface, and is the source address of the route back to the peer
-  (`office_path_allowed`). It never widens what the whitelist allows. Interfaces come from
+  to a non-tunnel interface (not `utun*`, `tailscale*`, `ipsec*`, `ppp*`), and is the source
+  address of the route back to the peer (`office_path_allowed`). It never widens what the
+  whitelist allows.
+- `relayed_incoming_allowed` (hook in `server::create_relay_connection_`, ko.24): ranode refuses
+  every relayed incoming connection before opening it; a relayed peer address is only the
+  rendezvous message's claim, which no address rule can check (decision 0009 addendum). Interfaces come from
   getifaddrs (`interface_addresses`), not `default_net`, which also probes gateways.
 - `listen_direct`: ranode on macOS binds 21118 without `SO_REUSEPORT`, so a port another app
   holds fails (card: busy); every other build calls upstream's `listen_any`.

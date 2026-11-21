@@ -82,10 +82,12 @@ This file is written in English only.
    builds"), from the merge commit of PR #37: `cargo test --lib -- hangul_key fork_update
    public_flavor updater` and `platform::macos` on a Mac, then on the signed ranode, after the
    cutover (operations, "Cutover keeping the Mac's ID"):
-   1. Craft Mac: by the kept ID from inside the office, password only, no click offered; by
+   1. Craft Mac: by the kept ID from inside the office, password only, no click offered (works on
+      upstream's LAN "intranet" TCP path; a WebRTC, KCP or relayed attempt is refused); by
       Tailscale IP;
-   2. Craft Mac: by ID from outside the office → refused; an office-range peer sent to the Craft
-      Mac's Tailscale IP → refused (decision 0009 addendum);
+   2. Craft Mac: by ID from outside the office → refused (relayed: refused before the relay
+      opens); an office-range peer sent to the Craft Mac's Tailscale IP → refused (decision 0009
+      addendum);
    3. own Mac: Tailscale IP works and click-accept is offered;
    4. the card shows the ID; `--set-incoming-policy` prints the expected line, exits 2 with ranode
       running and 1 for a public subnet;

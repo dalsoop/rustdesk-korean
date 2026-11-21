@@ -67,8 +67,9 @@ them can listen at a time.
   fd7a:115c:a1e0::/48, and on a company Craft Mac's ranode the office subnet) to port 21118, by
   Tailscale IP or by RustDesk ID through the public RustDesk server, or via the owner's server
   inside Tailscale. ranode is registered with the public RustDesk server; a peer arriving that way
-  is checked by its own address, so only a direct path from an allowed network gets in and a
-  relayed peer is refused. A Tailscale-range address that reaches ranode outside its Tailscale
+  on a direct path is checked by its own address, and ranode refuses every relayed incoming
+  connection before opening it (its address is only the server's claim; decision 0009 addendum),
+  so only a direct path from an allowed network gets in. A Tailscale-range address that reaches ranode outside its Tailscale
   interface is refused (decision 0009), and an office-subnet address is accepted only on this
   Mac's own address in that subnet on a non-tunnel interface with the route back through it.
 - ranode does not answer LAN discovery on UDP 21119 (upstream starts that listener only for an

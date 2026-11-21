@@ -429,11 +429,15 @@ fn in_private_subnet(entry: &str, ip: IpAddr) -> bool {
     }
 }
 
-/// Whether `ip` is held by an interface in `addrs` that is not a tunnel (`utun*`, `tailscale*`).
+/// Whether `ip` is held by an interface in `addrs` that is not a tunnel (`utun*`, `tailscale*`,
+/// and macOS's IKEv2/L2TP `ipsec*` and `ppp*`).
 fn is_lan_interface_address(addrs: &[(String, IpAddr)], ip: IpAddr) -> bool {
-    addrs
-        .iter()
-        .any(|(name, a)| *a == ip && !is_tailscale_interface_name(name))
+    addrs.iter().any(|(name, a)| {
+        *a == ip
+            && !is_tailscale_interface_name(name)
+            && !name.starts_with("ipsec")
+            && !name.starts_with("ppp")
+    })
 }
 
 /// The office-subnet counterpart of `tailscale_path_allowed` (ko.24): a peer address in one of the
@@ -456,6 +460,14 @@ fn office_path_allowed(
         || (listed.iter().any(|s| in_private_subnet(s, local))
             && on_lan_interface(local)
             && route_source(peer) == Some(local))
+}
+
+/// Korean fork hook for upstream's relay path (`server::create_relay_connection_`). A relayed
+/// peer's address is only what the rendezvous message claims; this computer never sees it, and the
+/// local address is its own socket to the relay, so neither the whitelist nor the path rules above
+/// can check it. ranode admits direct paths only and refuses every relay. `true` outside ranode.
+pub fn relayed_incoming_allowed() -> bool {
+    !is_public()
 }
 
 /// Korean fork hook for `Connection::on_open`, next to the whitelist check. `true` outside ranode.
@@ -913,10 +925,15 @@ mod tests {
         // Peers outside the listed subnets are left to the whitelist and the Tailscale rule.
         assert!(office_allowed("100.64.0.9", "100.101.2.3"));
         assert!(office_path_allowed(ip("192.168.0.9"), ip("10.8.0.2"), &[], lan, office_route));
-        let ifs = [("en1", "192.168.0.5"), ("utun7", "10.8.0.2")]
-            .map(|(name, a)| (name.to_owned(), ip(a)));
+        let ifs = [
+            ("en1", "192.168.0.5"),
+            ("utun7", "10.8.0.2"),
+            ("ipsec0", "10.9.0.2"),
+        ]
+        .map(|(name, a)| (name.to_owned(), ip(a)));
         assert!(is_lan_interface_address(&ifs, ip("192.168.0.5")));
         assert!(!is_lan_interface_address(&ifs, ip("10.8.0.2")));
+        assert!(!is_lan_interface_address(&ifs, ip("10.9.0.2")));
         // getifaddrs decoding, byte order included: every host has 127.0.0.1.
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         assert!(interface_addresses()

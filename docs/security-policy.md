@@ -22,8 +22,8 @@ This file is written in English only.
 |---|---|---|---|
 | A device inside the owner's tailnet (source in 100.64.0.0/10) | Connect to the main app on an owner's Mac | Direct port 21118 is on (`direct-server=Y`) and whitelist is `100.64.0.0/10`, both set with `sudo RustDesk --option` on that Mac; or through the owner's own RustDesk server, reachable only inside Tailscale; then the permanent password | — |
 | Any address outside the Tailscale ranges and the Mac's listed office subnet (internet, other LANs, public relay) | Connect in | never | the whitelist refuses any connection whose source address is outside it |
-| A device inside the owner's tailnet | Connect in to ranode (from ko.23), by Tailscale IP or (from ko.24) by ID | ranode is running in the logged-in session, its source is in 100.64.0.0/10 or fd7a:115c:a1e0::/48, the connection arrived on this Mac's Tailscale interface (decision 0009), and it gives ranode's permanent password (or someone at the Mac clicks accept, unless approve mode is `password`); `direct-server=Y`, the whitelist, `use-permanent-password` and `allow-remote-config-modification=N` are pinned in code (`OVERWRITE_SETTINGS`), which saved settings cannot override | the one-time password; changing the pinned settings through the UI, config files or `--option`; a 100.64.0.0/10 source that reaches the Mac on another interface (a carrier or hotel LAN using that range) |
-| A device on the office network (source in the office subnet) | Connect in to ranode on a company Craft Mac (from ko.24), by ID or address | the Mac's policy lists the office subnet (`--set-incoming-policy --extra-subnets`, approve mode `password`), the connection arrived on this Mac's own address in that subnet on a non-tunnel interface with the route back to the peer through it (the decision 0009 rule applied to the office subnet), and the peer gives the permanent password | a click to accept; any public or relayed address; an office-range source reaching another address of the Mac (its Tailscale IP, a VPN tunnel, a Tailscale subnet route) |
+| A device inside the owner's tailnet | Connect in to ranode (from ko.23), by Tailscale IP | ranode is running in the logged-in session, its source is in 100.64.0.0/10 or fd7a:115c:a1e0::/48, the connection arrived on this Mac's Tailscale interface (decision 0009), and it gives ranode's permanent password (or someone at the Mac clicks accept, unless approve mode is `password`); `direct-server=Y`, the whitelist, `use-permanent-password` and `allow-remote-config-modification=N` are pinned in code (`OVERWRITE_SETTINGS`), which saved settings cannot override | the one-time password; changing the pinned settings through the UI, config files or `--option`; a 100.64.0.0/10 source that reaches the Mac on another interface (a carrier or hotel LAN using that range) |
+| A device on the office network (source in the office subnet) | Connect in to ranode on a company Craft Mac (from ko.24), by ID or address | the Mac's policy lists the office subnet (`--set-incoming-policy --extra-subnets`, approve mode `password`), the connection arrived on this Mac's own address in that subnet on a non-tunnel interface (not `utun*`, `tailscale*`, `ipsec*`, `ppp*`) with the route back to the peer through it (the decision 0009 rule applied to the office subnet), and the peer gives the permanent password | a click to accept; any public address; any relayed connection; an office-range source reaching another address of the Mac (its Tailscale IP, a VPN tunnel, a Tailscale subnet route) |
 | Someone without Tailscale | Reach an owner's device | only by being invited into the tailnet | opening a port or a public-server path for them |
 
 - The office Linux server gets `direct-server=Y` from its own infrastructure repo, not from this fork.
@@ -36,14 +36,19 @@ This file is written in English only.
    before any password prompt. In ranode a source in a Tailscale range is then refused too unless
    the accepted socket's local address is a Tailscale address of this Mac's Tailscale interface
    and the route back to the peer leaves from that address (`public_flavor::incoming_path_allowed`,
-   decision 0009), with the same "Your ip is blocked by the peer" error.
+   decision 0009), with the same "Your ip is blocked by the peer" error; from ko.24 a source in a
+   listed office subnet is refused unless the local address is this Mac's own address in that
+   subnet on a non-tunnel interface with the route back through it.
 2. The peer sends the permanent password; a wrong one is refused and counted by upstream's
    attempt limiter. The fork adds no lockout, approval click or second factor of its own.
 3. Accepted sessions show upstream's connection window on the Mac; the fork keeps no extra log.
 
 - ranode stays registered with the public RustDesk server (it was before ko.23); a peer coming
-  through it is checked by its own address like any other, so only a direct path from an allowed
-  network gets in, and a relayed peer is refused.
+  through it on a direct path is checked by its own address like any other. On the relay path the
+  peer address is only what the rendezvous message claims (its sender is not checked), so from
+  ko.24 ranode refuses every relayed incoming connection before opening it
+  (`public_flavor::relayed_incoming_allowed`, decision 0009 addendum). Only a direct path from an
+  allowed network gets in.
 - `--set-incoming-policy` accepts only private IPv4 networks inside 10.0.0.0/8, 172.16.0.0/12 or
   192.168.0.0/16 without host bits, at most 8; a public range, `0.0.0.0/0`, a Tailscale-range
   entry or IPv6 is refused and nothing is saved. Approve mode is `password` or `both` only.

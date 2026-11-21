@@ -21,7 +21,8 @@ checks on the connecting address of every path, direct or through the server.
 
 ## Addendum (2026-11-17, ko.24)
 ranode's ID is now shown in the left pane and accepts connections, and the whitelist may carry
-private office subnets per Mac (decision 0002 addendum). The whitelist still checks the peer's own
-address on every path, so a relayed public-server peer is refused. Registering with an own server
+private office subnets per Mac (decision 0002 addendum). On direct paths the whitelist and the
+path rules check the peer's own address; on the relay path the address is only the server's claim,
+so ranode refuses every relayed incoming connection outright (decision 0009 addendum). Registering with an own server
 instead was rejected: on these Macs ID access runs through the public server, and receiving on a
 second server needs new registration code in upstream files.

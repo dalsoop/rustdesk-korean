@@ -54,8 +54,19 @@ without `SO_REUSEPORT` (`listen_direct`), so it cannot silently share 21118 with
 ko.24 lets a Mac's policy append private office subnets to the whitelist. Those subnets get the
 same three checks, adapted: a peer whose address lies in one of the private subnets of the
 enforced whitelist must have reached this Mac on a local address in that same subnet, assigned to
-a non-tunnel interface (not `utun*`/`tailscale*`), that is also the source address of the route
-back to the peer (`office_path_allowed`, after the Tailscale check). So an office-range source
-cannot reach the Mac through its Tailscale IP, a VPN tunnel or a Tailscale subnet route, or on a
-second address of the Mac. The Tailscale rule above is unchanged and still applies first. A
-private subnet cannot prove which LAN it is; that limit is in `findings.md`.
+a non-tunnel interface (not `utun*`, `tailscale*`, `ipsec*` or `ppp*`), that is also the source
+address of the route back to the peer (`office_path_allowed`, after the Tailscale check). So an
+office-range source cannot reach the Mac through its Tailscale IP, a VPN tunnel or a Tailscale
+subnet route, or on a second address of the Mac. The Tailscale rule above is unchanged and still
+applies first. A private subnet cannot prove which LAN it is; that limit is in `findings.md`.
+
+These checks trust the peer address the connection layer is given. On upstream's relay path that
+address is only what the rendezvous message claims (its sender is not checked), and the local
+address is this Mac's own socket to the relay server, so a forged claim of an office address would
+pass the office rule (and, when the relay socket runs through a Tailscale exit node, a Tailscale
+address would pass the rule above). ranode therefore refuses every relayed incoming connection
+before it opens the relay (`relayed_incoming_allowed`, a one-line hook in
+`server::create_relay_connection_`). No legitimate peer is lost: a relayed peer's real address is
+public and the whitelist refused it anyway. Every other path (direct listener, LAN intranet accept,
+TCP punch, KCP over a connected UDP socket) carries the address the socket actually talks to;
+WebRTC has local `0.0.0.0` and fails both rules.

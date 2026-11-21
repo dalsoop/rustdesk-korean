@@ -840,7 +840,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_onprem_choice_tip", "Tailscale로 연결된 팀 Mac·PC를 목록에서 골라 바로 접속합니다. Tailscale 앱과 팀에서 초대받은 계정이 필요합니다."),
         ("Connect over the internet", "인터넷으로 접속"),
         ("public_internet_choice_tip", "상대가 알려 준 RustDesk ID와 비밀번호로 접속합니다. RustDesk 계정 로그인이 필요합니다."),
-        ("public_incoming_tip", "같은 Tailscale 망의 기기(회사 Mac은 사무실 망의 기기도)가 이 Mac의 Tailscale 주소나 ID로 접속하고, 영구 비밀번호를 넣거나 이 Mac 앞에서 수락하면 들어옵니다. 이 망들 밖에서는 접속할 수 없고, 일회용 비밀번호는 받지 않습니다."),
+        ("public_incoming_tip", "같은 Tailscale 망의 기기가 Tailscale을 거쳐 이 Mac의 Tailscale 주소로 접속하고, 영구 비밀번호를 넣거나 (이 Mac이 허용하면) 이 Mac 앞에서 수락하면 들어옵니다. 회사 Mac은 사무실 망의 기기가 이 Mac의 ID로도 접속할 수 있습니다. 이 망들 밖에서는 접속할 수 없고, 일회용 비밀번호는 받지 않습니다."),
         ("Later", "나중에"),
         ("Show the welcome guide", "시작 안내 다시 보기"),
         ("Outgoing connections only", "접속하는 쪽 전용"),
