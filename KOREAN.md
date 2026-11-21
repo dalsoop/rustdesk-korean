@@ -230,7 +230,7 @@ RustDesk 프로토콜 버전(`Cargo.toml` 의 `1.5.0`)은 원본과 같게 둡�
 
 순서:
 1. `version:` 줄의 끝 두 자리를 올리는 PR 을 기본 브랜치에 병합합니다.
-2. 맥: m5m2 에서 빌드하고, m5m1 에서 Developer ID(V2Z46YY386)로 서명·공증합니다(번들 ID `com.carriez.rustdesk` 그대로). 같은 커밋으로 `RUSTDESK_FLAVOR=public` 빌드도 만들어 RustDesk Public 도 함께 냅니다. 서명·공증·zip 은 `res/osx-sign-notarize.sh <빌드된 .app> <zip 안 이름> <zip>` 로 합니다.
+2. macOS: build on the release Mac m5m1 (from ko.22; earlier releases were built on m5m2) and sign and notarize there with the Developer ID (V2Z46YY386) (bundle id `com.carriez.rustdesk` unchanged). Build `RUSTDESK_FLAVOR=public` from the same commit so RustDesk Public ships with it. Sign, notarize and zip with `res/osx-sign-notarize.sh <built .app> <name inside the zip> <zip>`.
    - 본 앱: `RustDesk.app` → `rustdesk-1.5.0-ko.N-macos-aarch64.zip`
    - Public: `RustDeskPublic.app` → name inside the zip `RustDesk (forked ranode).app` (until ko.16 `RustDesk Public.app`), `rustdesk-public-1.5.0-ko.N-macos-aarch64.zip`
 3. 윈도우·리눅스: GitHub Actions `Build desktop (Korean fork, Windows/Linux x64)` 가 기본 브랜치 push 에서 돕니다.
