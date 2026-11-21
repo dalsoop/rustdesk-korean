@@ -78,13 +78,15 @@ This file is written in English only.
   2866 appears in the MsiInstaller events; `msiexec /i <msi> /qn` still fails with the
   `BlockSelfInstalledApp` message in the log. Do not uninstall someone's existing RustDesk to test.
 
-## The signing script's LaunchServices cleanup is not yet seen in a real signing run
+## A "RustDesk 없음" memo written before ko.23 outlives a timing-out device
 
-- Condition: `res/osx-sign-notarize.sh` now unregisters its stage copy (`lsregister -u`) in the
-  exit trap (2026-11-21; before, each run left a dead record per bundle id). Checked on m5m1 only
-  with a dummy bundle and an early-failing run, not with a real sign and notarize.
-- Blast radius: if a record still survives, `open -b`, Gujo Cloud Apps or `rustdeskpublic://`
-  links can resolve to a missing copy, as before.
-- Why not now: the next real run is the next release.
-- Approach: after the next release's two signing runs on m5m1, `lsregister -dump` shows no path
-  under `~/tmp/osx-sign.*`; then remove this entry.
+- Condition: up to ko.22 a port check that timed out was remembered as "RustDesk 없음"
+  (`public-onprem-rustdesk-memos`). ko.23 never remembers a timeout, but it also does not clear
+  such an old memo, so the device shows "RustDesk 없음" again while each new check runs, then
+  "접속 불가". Seen on m5m1 on 2026-11-21: `win-build` (port 21118 times out) still had the memo
+  `missing` after ko.23 ran.
+- Blast radius: cosmetic, for a few seconds per check, on Macs that ran ko.22 or earlier.
+- Why not now: clearing it means changing the memo rules (new state handling); found during the
+  ko.23 release.
+- Approach: when the memo code is next touched, drop a device's memo when its check ends
+  `unreachable`; until then the memo is overwritten as soon as the device answers or refuses.
