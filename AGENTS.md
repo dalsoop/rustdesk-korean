@@ -25,9 +25,8 @@ rustdesk-korean/
 │   └── android-sign-release.sh    → Android APK signing with the pinned certificate
 ├── .github/workflows/
 │   ├── build-desktop-ko.yml       → Windows/Linux x64 builds on push to the default branch
-│   ├── flutter-unit-test.yml      → 5 fork Flutter test files (Korean input, ranode) on push
-│   ├── build-android-arm64.yml    → obsolete (old branch trigger), not the release path
-│   └── sign-apk.yml               → obsolete, throwaway keystore: never run
+│   ├── flutter-unit-test.yml      → 5 fork Flutter test files (Korean input, ranode) on push and PRs
+│   └── fork-rust-tests.yml        → fork Rust unit tests (Linux x64) on push and PRs
 ├── docs/
 │   ├── architecture.md            → fork components, the two apps, data flows
 │   ├── business-rules.md          → Korean key rules, app identities, incoming policy, versions

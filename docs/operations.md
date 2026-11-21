@@ -58,6 +58,12 @@ cd flutter && flutter pub get && flutter analyze <changed files> && \
     test/korean_toggle_key_test.dart test/tailscale_test.dart test/public_onprem_test.dart
 ```
 
+CI runs the first line (`fork-rust-tests.yml`, Linux x64) and the Flutter tests
+(`flutter-unit-test.yml`) on pushes and on pull requests to the default branch. Upstream's "CI",
+"Full Flutter CI", "Flutter Nightly Build" and "Update webpki-roots" are disabled in the
+repository's Actions settings (`gh workflow enable <name> -R dalsoop/rustdesk-korean` undoes it);
+their files stay byte-identical to upstream.
+
 
 ## Build the macOS apps
 

@@ -7,8 +7,8 @@ This file is written in English only.
 | Area | State | Evidence |
 |---|---|---|
 | Android Korean soft keyboard (grapheme diff, 두벌식 to Linux, F19/F24, 한/영 button) | released since ko.1–ko.4 | 3 Flutter test files run in CI on push (green 2026-11-17); checked by hand on a Galaxy Z Fold to macOS (ko.1) and to Pop!_OS COSMIC/fcitx5 (ko.3) |
-| Desktop 한/영 → peer OS key, macOS input-source switch, local hotkey pause | released ko.5–ko.10 | Rust unit tests exist (26 in `hangul_key`, 7 in `macos_input_source`, hotkey-flag tests); not run in CI, last pass not recorded; never tested with a Windows peer |
-| Fork update check | released ko.11 | Rust unit tests exist (`fork_update`, `updater`); not run in CI |
+| Desktop 한/영 → peer OS key, macOS input-source switch, local hotkey pause | released ko.5–ko.10 | Rust unit tests: 26 in `hangul_key` run in CI (`fork-rust-tests.yml`, push and PRs); `platform::macos` (13, input source and hotkey flags) Mac-only; all passed on m5m1 2026-11-21 at 223d2e56; never tested with a Windows peer |
+| Fork update check | released ko.11 | Rust unit tests `fork_update` (4), `updater` (3) run in CI (push and PRs); passed on m5m1 2026-11-21 |
 | ranode (on-prem + internet tabs, onboarding, sections, identity, optional Tailscale, public sign-in) | released up to ko.22 (latest release, 2026-11-21) | Flutter tests `tailscale_test`, `public_onprem_test`: 8 passed locally at PR #33 (2026-11-17); run in CI on push from ko.21. ko.22 signed build checked live on m5m1 (opened with `open -b` and from a terminal: device list and "Tailscale: … 연결됨") and on m5m2 after install (device list) |
 | Main app shown as "RustDesk (for korean)" | released ko.19 | installed on the owner's Macs |
 
@@ -22,7 +22,7 @@ This file is written in English only.
 - ko.23 (version `1.5.0+6823`, merged): ranode also accepts incoming connections from the tailnet
   with its permanent password only; left pane "이 Mac에 접속받기"; `--set-permanent-password`.
   Built: Rust compiled in the Windows/Linux CI build; Flutter tests green in CI; the Rust unit
-  tests (`public_flavor`) are compiled and run first on the release Mac (`m5m1`).
+  tests (`public_flavor`, 5) passed on `m5m1` on 2026-11-21 at 223d2e56 and run in CI from then.
 
 ## Remaining, in order
 
