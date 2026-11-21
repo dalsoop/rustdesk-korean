@@ -101,20 +101,6 @@ This file is written in English only.
   Network access, and look for "Your ip is blocked by the peer" on the client and the refusal on
   the receiving Mac.
 
-## The msi fix for error 2866 is not checked on a Windows PC
-
-- Condition: issue #10 (msi over an exe-installed RustDesk stopped with Windows Installer error
-  2866 instead of showing "please uninstall it first") is fixed by publishing `EndDialog` `Exit`
-  from `UI_AnotherAppDialog`'s Cancel (PR #43, 2026-11-21). The msi builds in
-  the fork's Windows CI; no Windows PC was available to run it.
-- Blast radius: if the dialog still fails, an msi install over an exe install ends in a generic
-  failure (1603) as before; nothing else changes.
-- Why not now: no Windows PC is available to this work.
-- Approach: on the next Windows PC test, follow issue #10's "Verify a fix": on a PC with an
-  exe-installed RustDesk, `msiexec /i <msi>` shows the dialog, Cancel ends setup with 1602 and no
-  2866 appears in the MsiInstaller events; `msiexec /i <msi> /qn` still fails with the
-  `BlockSelfInstalledApp` message in the log. Do not uninstall someone's existing RustDesk to test.
-
 ## A "RustDesk 없음" memo written before ko.23 outlives a timing-out device
 
 - Condition: up to ko.22 a port check that timed out was remembered as "RustDesk 없음"
