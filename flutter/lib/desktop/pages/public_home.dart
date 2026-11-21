@@ -28,6 +28,10 @@ const Duration _kSetupPollInterval = Duration(seconds: 5);
 // re-checked at least 5, 10, 20, then 30 seconds after the last read ended
 // (on the next 5-second tick), until it answers.
 const Duration _kNoAnswerMaxInterval = Duration(seconds: 30);
+// Once Tailscale is running, or while another tab is shown, it is read again
+// this long after the last read, so changes made outside this app (turned
+// off, signed out, another tailnet, peers coming and going) show up.
+const Duration _kRunningPollInterval = Duration(seconds: 30);
 
 enum _RustDeskState { checking, reachable, directOff, missing, unreachable }
 
@@ -81,8 +85,7 @@ class _PublicHomePageState extends State<PublicHomePage>
     _search.addListener(() => setState(() {}));
     WidgetsBinding.instance.addObserver(this);
     _refresh();
-    _setupPoll =
-        Timer.periodic(_kSetupPollInterval, (_) => _recheckIfNotReady());
+    _setupPoll = Timer.periodic(_kSetupPollInterval, (_) => _recheck());
     if (!publicWelcomeDone) {
       WidgetsBinding.instance.addPostFrameCallback((_) => showPublicWelcome(
           _onWelcomeChoice,
@@ -103,13 +106,16 @@ class _PublicHomePageState extends State<PublicHomePage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) _recheckIfNotReady(now: true);
+    if (state == AppLifecycleState.resumed) _recheck(now: true);
   }
 
-  /// While Tailscale is not usable yet (not installed, not answering, off,
-  /// waiting for sign-in or approval), reads it again, so the tab moves on by
-  /// itself once Tailscale is ready.
-  void _recheckIfNotReady({bool now = false}) {
+  /// Reads Tailscale again. While the on-prem tab waits for Tailscale to
+  /// become usable (not answering, unreadable, off, connecting, waiting for
+  /// sign-in or approval) every 5 seconds, so the tab moves on by itself once
+  /// Tailscale is ready; otherwise (running, or another tab) every 30 seconds,
+  /// and on coming back to the front at most every 5 seconds. Also keeps the
+  /// left pane's card current, which shows the last read on every tab.
+  void _recheck({bool now = false}) {
     if (!mounted) return;
     if (!_tsInstalled) {
       if (Tailscale.findBinary() != null) {
@@ -119,14 +125,14 @@ class _PublicHomePageState extends State<PublicHomePage>
       return;
     }
     final state = _snapshot?.state;
-    if (_tab != _onPremTab ||
-        _loading ||
-        _switching ||
-        state == null ||
-        state == TailscaleState.running) {
-      return;
-    }
-    if (!now && state == TailscaleState.notResponding) {
+    if (_loading || _switching || state == null) return;
+    final waiting = _tab == _onPremTab && state != TailscaleState.running;
+    if (!waiting) {
+      final wait = now ? _kSetupPollInterval : _kRunningPollInterval;
+      if (DateTime.now().difference(_lastReadDone) < wait) return;
+    } else if (!now &&
+        (state == TailscaleState.notResponding ||
+            state == TailscaleState.unreadable)) {
       var wait = _kSetupPollInterval;
       for (var i = 1; i < _noAnswerReads && wait < _kNoAnswerMaxInterval; i++) {
         wait *= 2;
@@ -134,7 +140,7 @@ class _PublicHomePageState extends State<PublicHomePage>
       if (wait > _kNoAnswerMaxInterval) wait = _kNoAnswerMaxInterval;
       if (DateTime.now().difference(_lastReadDone) < wait) return;
     }
-    _refresh();
+    _refresh(recheckAll: false);
   }
 
   void _onWelcomeChoice(bool internet) {
@@ -147,7 +153,10 @@ class _PublicHomePageState extends State<PublicHomePage>
         k: kOptionPublicOnPremRecords, v: encodeOnPremRecords(records));
   }
 
-  Future<void> _refresh() async {
+  /// [recheckAll] false (the timer, coming back to the front) keeps the
+  /// finished RustDesk checks of devices whose tailnet, online state and IP
+  /// did not change, so a periodic read does not probe every peer again.
+  Future<void> _refresh({bool recheckAll = true}) async {
     final seq = ++_readSeq;
     setState(() => _loading = true);
     TailscaleSnapshot snapshot;
@@ -160,26 +169,55 @@ class _PublicHomePageState extends State<PublicHomePage>
     }
     if (!mounted || seq != _readSeq) return;
     _lastReadDone = DateTime.now();
-    _noAnswerReads = snapshot.state == TailscaleState.notResponding
+    _noAnswerReads = snapshot.state == TailscaleState.notResponding ||
+            snapshot.state == TailscaleState.unreadable
         ? _noAnswerReads + 1
         : 0;
     final ids = snapshot.profiles.map((p) => p.id).toSet();
+    final previous = _snapshot;
+    final activeId = snapshot.activeProfile?.id;
+    final kept = <String>{};
+    if (!recheckAll &&
+        previous?.state == TailscaleState.running &&
+        snapshot.state == TailscaleState.running &&
+        previous?.activeProfile?.id == activeId) {
+      final before = {for (final d in previous!.devices) d.id: d};
+      for (final d in snapshot.devices) {
+        final old = before[d.id];
+        if (old == null || old.online != d.online || old.ipv4 != d.ipv4) {
+          continue;
+        }
+        // An online device keeps its result only once both its port check
+        // and its probe are in; one that did not answer is asked again.
+        final state = _rustDeskState(old);
+        final settled = old.online
+            ? state != _RustDeskState.checking &&
+                state != _RustDeskState.unreachable &&
+                _probe.containsKey(old.id)
+            : state != _RustDeskState.checking;
+        if (settled) kept.add(d.id);
+      }
+    }
     setState(() {
       _snapshot = snapshot;
       _loading = false;
       _tsInstalled = Tailscale.findBinary() != null;
-      if (!ids.contains(_selectedProfileId)) {
-        _selectedProfileId = snapshot.activeProfile?.id ??
+      // A new active profile (switched here, in the Tailscale app or by
+      // another program) is shown, instead of offering to switch back.
+      if (!ids.contains(_selectedProfileId) ||
+          activeId != previous?.activeProfile?.id) {
+        _selectedProfileId = activeId ??
             (snapshot.profiles.isEmpty ? null : snapshot.profiles.first.id);
       }
-      _reach.clear();
-      _probe.clear();
+      _reach.removeWhere((id, _) => !kept.contains(id));
+      _probe.removeWhere((id, _) => !kept.contains(id));
       _pendingChecks = 0;
     });
     if (snapshot.state != TailscaleState.running) return;
     // The devices belong to the running tailnet, whichever profile is picked.
     final tailnet = snapshot.activeProfile?.tailnet ?? '';
     for (final d in snapshot.devices) {
+      if (kept.contains(d.id)) continue;
       final ip = d.ipv4;
       if (ip == null) {
         _reach[d.id] = RustDeskReachability.unreachable;
@@ -218,8 +256,9 @@ class _PublicHomePageState extends State<PublicHomePage>
     return null;
   }
 
-  // Without `switch --list` support there is no profile; the running tailnet
-  // is still usable, its records keyed by an empty tailnet name.
+  // Without a profile list (never read, or a CLI without `switch --list`) the
+  // running tailnet is still usable, but nothing is saved for it: records and
+  // remembered checks are kept per tailnet name.
   TailscaleProfile get _recordProfile =>
       _selectedProfile ??
       const TailscaleProfile(id: '', tailnet: '', account: '', active: true);
@@ -333,15 +372,23 @@ class _PublicHomePageState extends State<PublicHomePage>
       text = translate('Tailscale: not found');
     } else if (snapshot.state == TailscaleState.notResponding) {
       text = translate('Tailscale is not responding');
+    } else if (snapshot.state == TailscaleState.unreadable) {
+      text = translate('Could not read the Tailscale status');
     } else if (snapshot.state == TailscaleState.stopped) {
       text = translate('Tailscale is turned off');
+    } else if (snapshot.state == TailscaleState.connecting) {
+      text = translate('Tailscale is connecting');
+    } else if (snapshot.state == TailscaleState.otherUser) {
+      text = translate('Tailscale is in use by another user');
     } else if (snapshot.state == TailscaleState.needsLogin) {
       text = translate('Tailscale: sign-in needed');
     } else if (snapshot.state == TailscaleState.needsApproval) {
       text = translate('Tailscale: waiting for approval');
     } else {
-      text = translate(
-          'Tailscale: {${snapshot.activeProfile?.tailnet ?? ''}} connected');
+      final tailnet = snapshot.activeProfile?.tailnet ?? '';
+      text = tailnet.isEmpty
+          ? translate('Tailscale: connected')
+          : translate('Tailscale: {$tailnet} connected');
     }
     return SizedBox(
       height: _kStatusBarHeight,
@@ -359,7 +406,8 @@ class _PublicHomePageState extends State<PublicHomePage>
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
     if (snapshot.state == TailscaleState.notFound ||
-        snapshot.state == TailscaleState.notResponding) {
+        snapshot.state == TailscaleState.notResponding ||
+        snapshot.state == TailscaleState.unreadable) {
       return _buildGuide(snapshot.state);
     }
     return Column(
@@ -427,7 +475,9 @@ class _PublicHomePageState extends State<PublicHomePage>
       final id = device == null ? '' : _rustDeskIdOf(device);
       if (!onPremEntryMatches(e, query, rustDeskId: id)) continue;
       final section = onPremSectionOf(
-          e, device == null ? null : _shownRustDesk(device));
+          e, device == null ? null : _shownRustDesk(device),
+          noAnswer: device != null &&
+              _rustDeskState(device) == _RustDeskState.unreachable);
       groups.putIfAbsent(section, () => []).add(e);
     }
     final hint = TextStyle(fontSize: 13, color: Theme.of(context).hintColor);
@@ -507,7 +557,7 @@ class _PublicHomePageState extends State<PublicHomePage>
       OnPremSection.missing => (
           Icons.remove_circle_outline,
           Colors.redAccent,
-          'No RustDesk'
+          'No answer from RustDesk'
         ),
       OnPremSection.offline => (Icons.cloud_off, theme.hintColor, 'Offline'),
     };
@@ -587,8 +637,10 @@ class _PublicHomePageState extends State<PublicHomePage>
     }
     final remembered = _memos.get(_recordProfile.tailnet, device.name)?.state;
     // The port check already failed; only the probe can still tell which.
+    final reach = _reach[device.id];
     if (remembered == OnPremRustDesk.reachable &&
-        _reach[device.id] == RustDeskReachability.unreachable) {
+        (reach == RustDeskReachability.closed ||
+            reach == RustDeskReachability.unreachable)) {
       return null;
     }
     return remembered;
@@ -605,7 +657,8 @@ class _PublicHomePageState extends State<PublicHomePage>
   /// read is done.
   void _settle(TailscaleDevice device, String tailnet) {
     final live = _liveRustDesk(device);
-    if (live != null) {
+    // Without a tailnet name a memo would be filed under no tailnet.
+    if (live != null && tailnet.isNotEmpty) {
       final probed = _probe[device.id]?.id ?? '';
       final id = live == OnPremRustDesk.missing
           ? ''
@@ -734,17 +787,27 @@ class _PublicHomePageState extends State<PublicHomePage>
         showPublicPeerHelp(entry.name, PublicPeerProblem.missing);
         return;
       case _RustDeskState.unreachable:
-        showPublicPeerHelp(entry.name, PublicPeerProblem.offline);
+        showPublicPeerHelp(
+            entry.name,
+            device.online
+                ? PublicPeerProblem.noAnswer
+                : PublicPeerProblem.offline);
         return;
       default:
         break;
     }
-    _saveRecords(recordOnPremConnection(_records, _recordProfile, device,
-        DateTime.now().millisecondsSinceEpoch));
+    if (_recordProfile.tailnet.isNotEmpty) {
+      _saveRecords(recordOnPremConnection(_records, _recordProfile, device,
+          DateTime.now().millisecondsSinceEpoch));
+    }
     connect(context, ip);
   }
 
   void _toggleFavorite(OnPremEntry entry, TailscaleProfile profile) {
+    if (profile.tailnet.isEmpty) {
+      showToast(translate('public_tailnet_unknown_tip'));
+      return;
+    }
     _saveRecords(
         toggleOnPremFavorite(_records, profile, entry.name, entry.connectIp));
   }
@@ -836,9 +899,13 @@ class _PublicHomePageState extends State<PublicHomePage>
       return _RustDeskState.unreachable;
     }
     if (!_probe.containsKey(device.id)) return _RustDeskState.checking;
-    return _probe[device.id] == null
+    if (_probe[device.id] != null) return _RustDeskState.directOff;
+    // Nothing answered the probe (ranode never does). Only a refused port
+    // shows the device is up without a RustDesk listening; a port check that
+    // timed out says nothing about RustDesk and is never remembered.
+    return reach == RustDeskReachability.closed
         ? _RustDeskState.missing
-        : _RustDeskState.directOff;
+        : _RustDeskState.unreachable;
   }
 
   String _tailscaleLine(TailscaleDevice device) {

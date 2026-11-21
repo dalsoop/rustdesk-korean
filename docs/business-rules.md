@@ -74,39 +74,60 @@ Option `enable-input-source-toggle`, default **on** (turned off only with
   after it is started again with the port free.
 - ranode settings that the user cannot change (the floor): `direct-server=Y`,
   `verification-method=use-permanent-password` (the one-time password is never accepted),
-  `allow-remote-config-modification=N`, and a whitelist that starts with `100.64.0.0/10`.
+  `allow-remote-config-modification=N`, and a whitelist that starts with
+  `100.64.0.0/10,fd7a:115c:a1e0::/48`. A peer in those ranges must also arrive on this Mac's
+  Tailscale interface, with the route back through it (decision 0009).
 - Per-Mac incoming policy (from ko.24), set only with `--set-incoming-policy` while ranode is quit
   and read once at ranode's start: extra private IPv4 subnets appended to the whitelist (the office
   subnet on the company Craft Macs; none on the owner's own Macs), and approve mode `password`
   (no click to accept; Craft Macs) or `both` / unset (upstream default: click to accept works and
   stays changeable in ranode's settings). Unset = ko.23 behaviour. An invalid stored entry is
-  skipped; the floor always holds.
+  skipped; the floor always holds. A peer in a listed subnet must arrive on this Mac's own address
+  in that same subnet, held by a non-tunnel interface, with the route back through it (the
+  decision 0009 rule applied to the office subnet).
 - ID connections (from ko.24): ranode is reached by its RustDesk ID through the public server
   (decision 0007); the whitelist checks the peer's own address, so an ID connection succeeds only
   where the path is direct from an allowed network (inside the office on a Craft Mac). A relayed
   peer arrives with its public address and is refused. Outside the office only the Tailscale IP works.
 - ranode's left pane "이 Mac에 접속받기" shows this Mac's RustDesk ID with a copy button (from ko.24;
   only once the ID is known, never "Generating ..."), its Tailscale IPv4 (from the latest Tailscale
-  read; "Tailscale이 꺼져 있어 Tailscale 주소로는 접속받을 수 없습니다" when Tailscale is not running),
-  whether a permanent password is set with upstream's "영구 비밀번호 설정" (`Set permanent password`)
-  button, and "지금은 접속받지 않음 (서비스 중지됨)" when `stop-service` is `Y`. It never shows the
-  one-time password. A busy port is not shown.
+  read, refreshed at least every 30 s on every tab; from ko.24 "Tailscale이 꺼져 있어 Tailscale
+  주소로는 접속받을 수 없습니다" when Tailscale is off, signed out, waiting or absent, "Tailscale 상태를
+  확인하는 중입니다 · …" before the first read and while it is connecting, not answering or
+  unreadable), whether a permanent password is set with upstream's "영구 비밀번호 설정" (`Set
+  permanent password`) button (without one, only a click to accept lets a device in, and the card
+  says so), "지금은 접속받지 않음 (서비스 중지됨)" when `stop-service` is `Y`, and "지금은 접속받지
+  않음: 다른 앱(…)이 21118 포트를 쓰고 있습니다 …" when the direct listener's bind failed
+  (`main_public_direct_port_busy`). It never shows the one-time password.
 - When ranode on a Mac is closed, other Macs' on-prem tabs show that Mac as "RustDesk 없음".
 - ranode's first launch clears, once, the own-server settings (custom rendezvous, relay, API
   server, key) and every peer, favourite and remembered remote id containing `@rustdesk.internal.kr`.
   Option `public-flavor-cleanup-done=Y` marks it done; it never runs again.
 - ranode shows the on-prem tab only when a Tailscale binary exists on the Mac; it re-checks every
   5 s, so installing Tailscale is the switch. Without it the internet tab is the whole home.
-- On-prem states and their next step: not installed → download link; stopped or signed out →
-  open the Tailscale app; `NeedsMachineAuth` → waiting for admin approval; running with no other
-  devices → say so. While not running the tab re-checks every 5 s; an installed binary that does not
-  answer in 5 s is "not responding" and is re-checked after 5, 10, 20, then every 30 s, and at once
-  when the window comes to the front. One read runs at a time; callers share it.
+- On-prem states and their next step: not installed → download link; `Stopped`, or the CLI saying
+  no Tailscale service is running → turned off, open the Tailscale app; `NeedsLogin` → sign in;
+  `NeedsMachineAuth` → waiting for admin approval; `Starting`/`NoState` → connecting;
+  `InUseOtherUser` → in use by another user; any other output → "상태를 읽지 못했습니다" (never
+  "turned off"); running with no other devices → say so. While the on-prem tab shows a not-running
+  state it re-checks every 5 s; an installed binary that does not answer in 5 s ("not responding")
+  or answers with unreadable output is re-checked after 5, 10, 20, then every 30 s, and at once
+  when the window comes to the front. While running, and on the internet tab, it re-reads every
+  30 s and on coming to the front (at most every 5 s). One read runs at a time; callers share it.
+- A re-read on the timer or on coming to the front re-checks RustDesk only on devices whose online
+  state or IPv4 changed; "다시 확인", refresh, opening the on-prem tab and a profile switch re-check
+  every device. A new active profile between reads becomes the selected one.
+- RustDesk state of an online device: port open → 바로 접속; probe answered → 직접 접속 꺼짐; port
+  refused and no probe answer → RustDesk 없음; port timed out and no probe answer → 접속 불가 in the
+  "RustDesk 응답 없음" section, never remembered.
 - Device sections, in order: 즐겨찾기, RustDesk 있음 · 바로 접속, RustDesk 있음 · 직접 접속 꺼짐, 확인 중,
-  RustDesk 없음 (folded), 오프라인 (folded). Results are remembered per tailnet + device name
+  RustDesk 응답 없음 (folded), 오프라인 (folded). Results are remembered per tailnet + device name
   (`public-onprem-rustdesk-memos`); an offline device never uses a remembered result.
+- Device names are the first DNS label; a device shared in from another tailnet whose label equals
+  another device's is named by its full DNS name.
 - Recents and favourites of the on-prem tab are keyed by tailnet + device name
-  (`public-onprem-records`) and never mix with internet ids.
+  (`public-onprem-records`) and never mix with internet ids. Nothing is saved without a tailnet
+  name; a failed `switch --list` keeps the last profile list.
 - Switching to a non-active Tailscale profile needs the user's confirmation first.
 - First-run guide: "팀 기기에 접속" (on-prem) or "인터넷으로 접속" (internet) sets the start tab
   (`public-start-tab`); "나중에" keeps on-prem; `public-welcome-done` marks it shown.

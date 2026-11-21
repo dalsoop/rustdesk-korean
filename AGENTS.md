@@ -27,9 +27,8 @@ rustdesk-korean/
 │   └── android-sign-release.sh    → Android APK signing with the pinned certificate
 ├── .github/workflows/
 │   ├── build-desktop-ko.yml       → Windows/Linux x64 builds on push to the default branch
-│   ├── flutter-unit-test.yml      → 5 fork Flutter test files (Korean input, ranode) on push
-│   ├── build-android-arm64.yml    → obsolete (old branch trigger), not the release path
-│   └── sign-apk.yml               → obsolete, throwaway keystore: never run
+│   ├── flutter-unit-test.yml      → 5 fork Flutter test files (Korean input, ranode) on push and PRs
+│   └── fork-rust-tests.yml        → fork Rust unit tests (Linux x64) on push and PRs
 ├── docs/
 │   ├── architecture.md            → fork components, the two apps, data flows
 │   ├── business-rules.md          → Korean key rules, app identities, incoming policy, versions
@@ -58,8 +57,11 @@ rustdesk-korean/
   (`com.carriez.rustdesk` / `RustDesk` / `rustdesk`; `net.ranode.rustdesk-public` /
   `RustDeskPublic` / `rustdeskpublic`): macOS permissions, settings and the service hang on them.
 - Incoming connections to the owner's devices are accepted only from the Tailscale range
-  100.64.0.0/10, plus the office subnet on the company Craft Macs (set per Mac by the machine
-  setup); never from a public address. No change may open a device to the internet.
+  100.64.0.0/10 (ranode from ko.23 also Tailscale's IPv6 fd7a:115c:a1e0::/48, and only when the
+  connection arrives on this Mac's Tailscale interface, decision 0009), plus the office subnet on
+  the company Craft Macs (set per Mac by the machine setup; from ko.24 only when the connection
+  arrives on this Mac's own address in that subnet on a non-tunnel interface, the same rule);
+  never from a public address. No change may open a device to the internet.
 - The owner's personal release keys (Developer ID, notary key, Android key) never go into CI, a
   company store or the repo. The stable internal signing identity is a machine-setup build asset
   kept only in the vault and the build Mac's keychain, never in the repo or CI.

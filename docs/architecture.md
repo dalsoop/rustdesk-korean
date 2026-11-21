@@ -37,7 +37,7 @@ One source tree, two builds. `RUSTDESK_FLAVOR=public` is read by `build.py` (wri
 | Bundle id / app name / scheme | `com.carriez.rustdesk` / `RustDesk` / `rustdesk` | `net.ranode.rustdesk-public` / `RustDeskPublic` / `rustdeskpublic` |
 | Config, IPC socket, logs | under `RustDesk` | under `RustDeskPublic` (never shared) |
 | Rendezvous server | the owner's own RustDesk server, reachable only inside Tailscale | public RustDesk server (internet tab; registers its ID there, shown in the left pane from ko.24) |
-| Incoming | yes; direct port 21118 + whitelist 100.64.0.0/10 set on each Mac with `sudo RustDesk --option` | from ko.23 yes, in its own GUI process: pinned `direct-server=Y`, whitelist 100.64.0.0/10, permanent password only; from ko.24 also by ID via the public server, whitelist + the Mac's extra private subnets and approve mode from `--set-incoming-policy` (read at start); until ko.22 no |
+| Incoming | yes; direct port 21118 + whitelist 100.64.0.0/10 set on each Mac with `sudo RustDesk --option` | from ko.23 yes, in its own GUI process: pinned `direct-server=Y`, whitelist 100.64.0.0/10 and fd7a:115c:a1e0::/48, arriving on the Tailscale interface only (decision 0009), permanent password only; from ko.24 also by ID via the public server, whitelist + the Mac's extra private subnets (arriving on this Mac's own address in that subnet on a non-tunnel interface) and approve mode from `--set-incoming-policy` (read at start); until ko.22 no |
 | Service (LaunchDaemon/Agent) | upstream's service can be installed per Mac; the owner does not need login-screen access | refused in code |
 
 Both use TCP 21118 (direct access) and UDP 21119 (LAN discovery) when they listen, so only one of
@@ -47,21 +47,30 @@ them can listen at a time.
 
 1. `public_home.dart` asks `Tailscale.read()`; `tailscale.dart` finds the binary
    (`/Applications/Tailscale.app/Contents/MacOS/Tailscale`, then `PATH`, then `/opt/homebrew/bin`,
-   `/usr/local/bin`) and runs `status --json` and `switch --list` with a 5 s timeout.
-2. The JSON becomes `TailscaleState` (`notFound`, `notResponding`, `stopped`, `needsLogin`,
-   `needsApproval`, `running`) plus devices and profiles.
-3. For every device with an IPv4 the tab opens TCP to `<tailscale ip>:21118` (1.5 s); to each
-   online one it also sends a UDP discovery ping to 21119 through `mainPublicProbeRustdesk` to read the peer's RustDesk ID and hostname.
-4. The device lands in a section ("바로 접속", "직접 접속 꺼짐", "확인 중", "RustDesk 없음", "오프라인").
+   `/usr/local/bin`; the app bundle last while `/var/run/tailscaled.socket` exists) and runs
+   `status --json` and `switch --list` with a 5 s timeout. The page reads again every 5 s while
+   the on-prem tab waits for Tailscale, otherwise every 30 s and on coming to the front.
+2. Exit code, stdout and stderr become `TailscaleState` (`notFound`, `notResponding`,
+   `unreadable`, `stopped`, `connecting`, `otherUser`, `needsLogin`, `needsApproval`, `running`)
+   plus devices and profiles (a failed `switch --list` keeps the last profiles).
+3. For every device with an IPv4 the tab opens TCP to `<tailscale ip>:21118` (1.5 s: open,
+   refused or no answer); to each online one it also sends a UDP discovery ping to 21119 through
+   `mainPublicProbeRustdesk` to read the peer's RustDesk ID and hostname. A timed re-read repeats
+   this only for devices whose online state or IP changed.
+4. The device lands in a section ("바로 접속", "직접 접속 꺼짐", "확인 중", "RustDesk 응답 없음", "오프라인").
 5. A click connects to the device's current Tailscale IP as the peer id; the peer accepts because
    the IP is inside its whitelist and its direct server is on.
 
 ## Boundaries
 
-- What crosses into the owner's devices: only connections from 100.64.0.0/10 (and, on a company
-  Craft Mac's ranode, the office subnet) to port 21118, by Tailscale IP or by RustDesk ID through the public RustDesk server.
-  ranode is registered with the public RustDesk server; a peer arriving that way is checked by its
-  own address, so only a direct path from an allowed network gets in and a relayed peer is refused.
+- What crosses into the owner's devices: only connections from 100.64.0.0/10 (ranode also
+  fd7a:115c:a1e0::/48, and on a company Craft Mac's ranode the office subnet) to port 21118, by
+  Tailscale IP or by RustDesk ID through the public RustDesk server, or via the owner's server
+  inside Tailscale. ranode is registered with the public RustDesk server; a peer arriving that way
+  is checked by its own address, so only a direct path from an allowed network gets in and a
+  relayed peer is refused. A Tailscale-range address that reaches ranode outside its Tailscale
+  interface is refused (decision 0009), and an office-subnet address is accepted only on this
+  Mac's own address in that subnet on a non-tunnel interface with the route back through it.
 - ranode does not answer LAN discovery on UDP 21119 (upstream starts that listener only for an
   "installed" app), so other Macs find a ranode-only Mac through TCP 21118 alone.
 - The Tailscale module never talks to Tailscale's servers or LocalAPI; it only runs the local CLI.

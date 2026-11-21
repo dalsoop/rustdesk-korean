@@ -36,7 +36,7 @@ change once published.
 | `enable-input-source-toggle` | Y/N | Y | controlled Mac switches input source on F18/Hangul/LANG1 |
 | `direct-server` | Y/N | N | main app: Y on the owner's Macs; ranode: pinned Y from ko.23 (N before), and `--option` refuses on ranode (see below) |
 | `verification-method` | `use-temporary-password` / `use-permanent-password` / both | both | ranode: pinned `use-permanent-password` from ko.23 |
-| `whitelist` | CIDR list | empty | main app: `100.64.0.0/10` on the owner's Macs; ranode: pinned to `100.64.0.0/10` + the policy's extra subnets |
+| `whitelist` | CIDR list | empty | main app: `100.64.0.0/10` on the owner's Macs; ranode: pinned to `100.64.0.0/10,fd7a:115c:a1e0::/48` (from ko.23) + the policy's extra subnets (ko.24) |
 | `allow-remote-config-modification` | Y/N | N | ranode: pinned `N` from ko.24 |
 | `approve-mode` | `password` / `click` / empty (both) | empty | ranode: pinned `password` when the policy says `password` (ko.24), otherwise upstream's, changeable in settings |
 
@@ -66,7 +66,7 @@ Android: `korean-toggle-key` holds the 한/영 button's pinned key (unset = auto
 - Stored as ranode local options `public-incoming-extra-subnets` (comma list, no spaces) and
   `public-incoming-approve-mode` (`password` / `both`).
 - Output: one stdout line with the effective policy, e.g.
-  `whitelist=100.64.0.0/10,10.0.0.0/24 approve-mode=password` (unset prints `approve-mode=both`); exit 0.
+  `whitelist=100.64.0.0/10,fd7a:115c:a1e0::/48,10.0.0.0/24 approve-mode=password` (unset prints `approve-mode=both`); exit 0.
   `both` means "no override": a choice saved in ranode's own settings (e.g. click only) still applies.
 - Errors (stderr, nothing saved): exit 1 for an unknown, duplicate, missing or invalid argument or
   any refused entry, or running as root; exit 2 when ranode is running (its IPC answers). Zero vs

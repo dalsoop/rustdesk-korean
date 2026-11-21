@@ -22,6 +22,7 @@ the whitelist in code so its users cannot widen it.
 On the company Craft Macs the whitelist also includes the office subnet and approve mode is
 password-only, as the owner decided for the main app there (the machine-setup repo's decision 0006
 on unattended RustDesk on the Craft Macs). The owner's own Macs stay Tailscale only. The fork
-enforces the floor (`100.64.0.0/10` first, permanent password only, never a public address); the
-per-Mac part comes from the machine setup through `--set-incoming-policy`. ranode's incoming now
-also works by RustDesk ID, from allowed networks only.
+enforces the floor (`100.64.0.0/10,fd7a:115c:a1e0::/48` first, permanent password only, never a
+public address); the per-Mac part comes from the machine setup through `--set-incoming-policy`.
+ranode's incoming now also works by RustDesk ID, from allowed networks only. Office-subnet peers
+must arrive on the Mac's own address in that subnet, as decision 0009's addendum says.

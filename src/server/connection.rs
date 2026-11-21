@@ -1499,6 +1499,11 @@ impl Connection {
         if !self.check_whitelist(&addr).await {
             return false;
         }
+        // Korean fork: ranode trusts a Tailscale-range peer only on its Tailscale interface.
+        if !crate::public_flavor::incoming_path_allowed(addr, self.stream.local_addr()) {
+            self.send_login_error("Your ip is blocked by the peer").await;
+            return false;
+        }
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         if crate::is_server() && Config::get_option("allow-only-conn-window-open") == "Y" {
             if !crate::check_process("", !crate::platform::is_root()) {

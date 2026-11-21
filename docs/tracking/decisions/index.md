@@ -12,3 +12,4 @@ This file is written in English only.
 | 0006 | macOS releases are signed on the owner's Mac, not in CI (ko.24 addendum: internal builds signed with a stable internal identity) | 2026-11-17 |
 | 0007 | ranode stays registered with the public server while it accepts incoming (ko.24 addendum: ID shown and accepted) | 2026-11-17 |
 | 0008 | ranode accepts only its permanent password | 2026-11-17 |
+| 0009 | ranode trusts a Tailscale-range peer only on the Tailscale interface (ko.24 addendum: the same rule for the office subnet) | 2026-11-21 |

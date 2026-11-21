@@ -29,15 +29,25 @@ Not this module's scope: upstream pages beyond thin `bind.mainIsPublicFlavor()` 
 - `Tailscale._run` never throws, returns null on any failure, stops a hung CLI (SIGTERM, SIGKILL
   after 1 s), and decodes output leniently; `Tailscale.read()` shares one in-flight read.
 - The CLI is located by `findBinary()` only (app bundle, `PATH`, `/opt/homebrew/bin`,
-  `/usr/local/bin`). A Finder-launched app has no shell environment, and the Tailscale app binary
+  `/usr/local/bin`; the app bundle last when `/var/run/tailscaled.socket` exists, i.e. the
+  open-source `tailscaled` runs). A Finder-launched app has no shell environment, and the Tailscale app binary
   then refuses to act as a CLI; `_run` therefore starts every CLI with
   `tailscaleCliEnvironment(...)` (`TERM=dumb` added only when `TERM` is missing or empty).
-- `notFound` means no binary; `notResponding` means a binary that did not answer in time; neither
-  is reported as "stopped".
+- `notFound` means no binary; `notResponding` means a binary that did not answer in time;
+  `unreadable` means output that is not a known status; none of them is reported as "stopped".
+  `stopped` is `BackendState: Stopped` or the CLI's "failed to connect to local …" on stderr
+  (`tailscaleStatusFromCli`); `Starting`/`NoState` are `connecting`.
+- `listProfiles()` returns null on failure and `Tailscale._read` then keeps the last list; the page
+  saves no record or memo under an empty tailnet name.
+- `checkRustDesk`: refused → `closed` (host up), timeout or other error → `unreachable`; a timeout
+  never becomes "RustDesk 없음" and is never remembered.
 - The page's loading flag is cleared on every path of a refresh.
 - Option names `public-onprem-records`, `public-onprem-rustdesk-memos`, `public-start-tab`,
   `public-welcome-done`, `korean-toggle-key` are stored user data; renaming them loses it.
 - `kPublicAppDisplayName` equals `RUSTDESK_DISPLAY_NAME` in `build.py`.
+- `PublicIntroCard` has no timer: it rebuilds on `Tailscale.latest` (kept fresh on every tab by the
+  home page's 30 s re-read) and reads `bind.mainPublicDirectPortBusy()` on each build; its texts
+  must say only what `public_flavor` enforces (Tailscale-only path, permanent password or click).
 - Soft keyboard: F19 is never re-sent inside a word; diffs are by grapheme cluster.
 
 ## Tests
@@ -46,4 +56,6 @@ Not this module's scope: upstream pages beyond thin `bind.mainIsPublicFlavor()` 
   Both files run in CI with the soft-keyboard tests.
 - `test/soft_keyboard_input_utils_test.dart`, `hangul_dubeolsik_test.dart`,
   `korean_toggle_key_test.dart`: composition diffs, 두벌식 mapping, auto key per OS.
-- Live check for ranode changes: launch from Finder with Tailscale up, stopped, restarting, absent.
+- Live check for ranode changes: launch from Finder with Tailscale up, stopped, restarting, absent;
+  with the app open, turn Tailscale off and on, and switch tailnet in the Tailscale menu (the tab
+  follows within about 30 s).

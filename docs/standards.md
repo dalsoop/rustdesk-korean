@@ -59,14 +59,16 @@ This file is written in English only.
 
 ## Verification gates
 
-Before merge (local; CI does not run on pull requests):
+Before merge (pull requests to the default branch run "fork Rust unit tests" and "flutter unit
+tests (soft keyboard / Korean)" when their paths change; both must be green):
 
 - Rust: `cargo test --lib` covering the fork modules that changed (`hangul_key`, `fork_update`,
   `public_flavor`, `updater`, `platform::macos_input_source`, macOS hotkey tests in
-  `platform::macos`) — macOS-only tests need a Mac.
-- Flutter: `flutter analyze` on the changed files and `flutter test` on the fork tests
+  `platform::macos`). CI runs the first four on Linux; the macOS-only tests still run locally on
+  a Mac.
+- Flutter: `flutter analyze` on the changed files (local) and `flutter test` on the fork tests
   (`soft_keyboard_input_utils_test`, `hangul_dubeolsik_test`, `korean_toggle_key_test`,
-  `tailscale_test`, `public_onprem_test`).
+  `tailscale_test`, `public_onprem_test`; CI).
 After merge, before release (CI on push to the default branch):
 
 - "Build desktop (Korean fork, Windows/Linux x64)" is green for the release commit, and
@@ -79,6 +81,7 @@ After merge, before release (CI on push to the default branch):
 - macOS assets MUST pass `spctl` as "Notarized Developer ID"; the APK MUST carry the pinned
   certificate; every asset ships with its `.sha256`.
 - MUST NOT set `ANDROID_SIGN_EXPECTED_SHA256` (it replaces the pinned certificate).
-- MUST NOT run `sign-apk.yml`: it signs with a throwaway keystore.
+- The APK is signed only by `res/android-sign-release.sh` on the signing Mac; no workflow signs
+  or publishes an APK.
 - Signing runs only on the owner's signing Mac with the owner's keys; MUST NOT add signing keys
   to GitHub Actions or any CI.

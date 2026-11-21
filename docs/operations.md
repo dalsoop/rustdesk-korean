@@ -9,16 +9,18 @@ This file is written in English only.
 - **Signing Mac**: holds the age key for the SOPS repo with the owner's Developer ID and notary
   key, `bwsx` access to the Bitwarden Secrets Manager project `android-signing`, `rcodesign`, `sops`,
   Xcode command-line tools, Android build-tools 34.0.0 and JDK 17.
-- Which machines play these roles is not fixed in this repo; the owner's device table in the
-  machine-setup repo is the binding.
-- The signing scripts' defaults were set for the former signing Mac. On any other Mac override:
+- Both roles are played by the owner's Mac Studio `m5m1` (checked 2026-11-21: it holds `~/work/sdk`
+  with Flutter 3.24.5, vcpkg, Android build-tools and JDK 17, the SOPS checkout and age key, the
+  Developer ID and `bwsx`; ko.21 and ko.22 were built, signed and released there by agents). The
+  owner's device table in the machine-setup repo stays the binding if this changes.
+- The signing scripts' defaults are set for `m5m1`. On any other Mac override:
 
-| Variable | Script | Role | Default (former signing Mac) |
+| Variable | Script | Role | Default (`m5m1`) |
 |---|---|---|---|
 | `PRINCIPAL_SECRETS_ROOT` | osx-sign-notarize | checkout of the SOPS repo with `secrets/macbook-tools/` | `~/.environment-secret-broker/principal-secrets-mono` |
-| `SOPS_AGE_KEY_FILE` | osx-sign-notarize | age key that decrypts those files | `~/.config/sops/age/<former host>-se.txt` |
-| `BWSX` | android-sign-release | path to `bwsx` | looked up in the agent-secret-controller plugin cache |
-| `BWS_HANDLE` | android-sign-release | `bwsx` handle for the Secrets Manager access token | a handle named after the former signing Mac |
+| `SOPS_AGE_KEY_FILE` | osx-sign-notarize | age key that decrypts those files | `~/.config/sops/age/m5m1-se.txt` |
+| `BWSX` | android-sign-release | path to `bwsx` | newest `bin/bwsx` under the `agent-secret-controller-skills` plugin cache |
+| `BWS_HANDLE` | android-sign-release | `bwsx` handle for the Secrets Manager access token | `ranode-m5m1` |
 | `AGENT_SECRET_SE_IDENTITY` | android-sign-release | identity file `bwsx` uses | `~/.config/sops/age/$(hostname -s)-se.txt` |
 | `ANDROID_BUILD_TOOLS`, `JAVA_HOME` | android-sign-release | apksigner 34.0.0, JDK 17 | under `~/work/sdk/` |
 
@@ -56,6 +58,12 @@ cd flutter && flutter pub get && flutter analyze <changed files> && \
     test/korean_toggle_key_test.dart test/tailscale_test.dart test/public_onprem_test.dart
 ```
 
+CI runs the first line (`fork-rust-tests.yml`, Linux x64) and the Flutter tests
+(`flutter-unit-test.yml`) on pushes and on pull requests to the default branch. Upstream's "CI",
+"Full Flutter CI", "Flutter Nightly Build" and "Update webpki-roots" are disabled in the
+repository's Actions settings (`gh workflow enable <name> -R dalsoop/rustdesk-korean` undoes it);
+their files stay byte-identical to upstream.
+
 
 ## Build the macOS apps
 
@@ -69,10 +77,11 @@ first `.app` away before the second build overwrites the Release folder.
 
 ## Release ko.N
 
-Releases are made by the owner on the owner's release Mac (the Mac that holds `~/work/sdk` and the
-signing keys); agents on the company machines cannot reach it and do not release. An agent hands
-over: the merge commit on `feat/sync-upstream-1.5.0`, the version line, and the live checks to run
-on the signed build before marking the release Latest.
+Releases are made on the release Mac `m5m1` (it holds `~/work/sdk` and the signing keys). Shipping
+is delegated to agents (owner, 2026-11-06): an agent on `m5m1` builds, signs, publishes and installs
+a release from the merge commit on `feat/sync-upstream-1.5.0` without waiting for the owner's word,
+and runs the live checks on the signed build before marking it Latest. macOS builds run through the
+build queue (`build-pipeline submit … --host m5m1`), never on the M1 MacBooks.
 
 1. Merge the PR that sets `version: 1.5.0+68NN` in `flutter/pubspec.yaml` (and the KOREAN.md notes)
    into `feat/sync-upstream-1.5.0`. CI then builds Windows/Linux artifacts.
@@ -99,9 +108,10 @@ on the signed build before marking the release Latest.
 6. Roll out: the owner's Macs pin version + sha256 per app in their machine-setup repo; the office
    Linux server pins `versions.rustdesk` (`1.5.0+koN`), sha256 and URL in its infrastructure repo.
 
-## Internal builds (from ko.23)
+## Internal builds (from ko.24)
 
-- ko.23 and later may ship as internal builds: made on the company build Mac by the machine-setup
+- ko.24 and later may ship as internal builds (ko.23 was released as a notarized Developer ID
+  release on 2026-11-21): made on the company build Mac by the machine-setup
   repo's `ranode-build` script from a merge commit on `feat/sync-upstream-1.5.0`, installed only on
   the owner's and the company's Macs. A notarized Developer ID release is optional and later.
 - Signing rule: every internal build is signed with the one stable self-signed code-signing
@@ -110,7 +120,7 @@ on the signed build before marking the release Latest.
   Accessibility and Input Monitoring grants to the signing identity, and an ad-hoc signature
   changes with every build. Check with `codesign -dv` before installing.
 - Before the first internal build of a commit, run the Rust tests of the changed fork modules on
-  the build Mac (CI runs no Rust tests).
+  the build Mac (CI runs them on Linux only; `platform::macos` and the macOS listener need a Mac).
 
 ## ranode as the receiving app (from ko.23)
 

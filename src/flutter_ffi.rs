@@ -2544,6 +2544,10 @@ pub fn main_public_probe_rustdesk(ip: String) -> String {
     crate::public_flavor::probe_rustdesk_json(&ip)
 }
 
+pub fn main_public_direct_port_busy() -> SyncReturn<bool> {
+    SyncReturn(crate::public_flavor::direct_listener_failed())
+}
+
 pub fn is_disable_settings() -> SyncReturn<bool> {
     SyncReturn(config::is_disable_settings())
 }

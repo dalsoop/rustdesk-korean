@@ -889,6 +889,19 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("public_incoming_stopped", ""),
         ("public_config_screen", ""),
         ("public_config_acc", ""),
+        ("Could not read the Tailscale status", ""),
+        ("public_ts_unreadable_tip", ""),
+        ("Tailscale is connecting", ""),
+        ("public_ts_connecting_tip", ""),
+        ("Tailscale is in use by another user", ""),
+        ("public_ts_other_user_tip", ""),
+        ("Tailscale: connected", ""),
+        ("public_tailnet_unknown_tip", ""),
+        ("No answer from RustDesk", ""),
+        ("public_no_answer_help", ""),
+        ("public_incoming_checking_tailscale", ""),
+        ("public_incoming_port_busy", ""),
+        ("public_incoming_no_tailscale_tip", ""),
     ].iter().cloned().collect();
 }
 

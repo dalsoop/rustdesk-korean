@@ -1,0 +1,115 @@
+name: fork Rust unit tests (Korean key, ranode, update check)
+
+# Unit tests of the fork's own Rust modules on Linux x64. The desktop build only
+# builds, so these run separately, also on pull requests to the default branch.
+# Toolchain and vcpkg setup follow build-desktop-ko.yml (Linux x64 job) and share
+# its vcpkg binary cache. macOS-only tests (macos_input_source, platform::macos
+# hotkey tests) still run on a Mac (docs/standards.md).
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/sync-upstream-1.5.0
+    paths:
+      - "src/**"
+      - "libs/**"
+      - "build.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "vcpkg.json"
+      - "res/vcpkg/**"
+      - ".github/workflows/fork-rust-tests.yml"
+  pull_request:
+    branches:
+      - feat/sync-upstream-1.5.0
+    paths:
+      - "src/**"
+      - "libs/**"
+      - "build.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "vcpkg.json"
+      - "res/vcpkg/**"
+      - ".github/workflows/fork-rust-tests.yml"
+
+permissions:
+  contents: read
+
+env:
+  RUST_VERSION: "1.75" # same as the Linux x64 desktop build
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg-bincache,readwrite"
+  VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d" # keep equal to build-desktop-ko.yml
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Maximize build space
+        run: |
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            gcc \
+            g++ \
+            libasound2-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            libgtk-3-dev \
+            libpulse-dev \
+            libunwind-dev \
+            libva-dev \
+            libvdpau-dev \
+            libxcb-randr0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxdo-dev \
+            libxfixes-dev \
+            nasm \
+            pkg-config
+
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-unknown-linux-gnu
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          prefix-key: fork-rust-tests
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
+        with:
+          vcpkgDirectory: /opt/artifacts/vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Cache vcpkg binary packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-bincache
+          key: vcpkg-bin-x64-linux-${{ env.VCPKG_COMMIT_ID }}-${{ hashFiles('vcpkg.json', 'res/vcpkg/**') }}
+          restore-keys: vcpkg-bin-x64-linux-${{ env.VCPKG_COMMIT_ID }}-
+
+      - name: Install vcpkg dependencies
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/vcpkg-bincache"
+          $VCPKG_ROOT/vcpkg install --triplet x64-linux --x-install-root="$VCPKG_ROOT/installed"
+
+      - name: Run fork unit tests
+        shell: bash
+        # One test binary, filtered to the fork modules (docs/operations.md "Verify").
+        run: cargo test --locked --lib -- hangul_key fork_update public_flavor updater

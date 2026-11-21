@@ -53,13 +53,24 @@ e4e8  urit245@gmail.com       urit245@gmail.com*
       "OS": "macOS",
       "Online": true,
       "TailscaleIPs": ["100.64.0.1"]
+    },
+    "nodekey:shared": {
+      "ID": "n4",
+      "HostName": "nas",
+      "DNSName": "nas.other-tailnet.ts.net.",
+      "OS": "linux",
+      "Online": true,
+      "TailscaleIPs": ["100.64.0.4"]
     }
-  }
+  },
+  "MagicDNSSuffix": "tail1234.ts.net"
 }
 ''';
     final status = parseTailscaleStatusJson(output);
     expect(status.state, TailscaleState.running);
-    expect(status.devices.map((d) => d.name), ['galaxy-s24', 'nas']);
+    // A shared-in device with one of our names gets its full DNS name.
+    expect(status.devices.map((d) => d.name),
+        ['galaxy-s24', 'nas', 'nas.other-tailnet.ts.net']);
     final phone = status.devices[0];
     expect(phone.os, 'android');
     expect(phone.online, isFalse);
@@ -93,6 +104,27 @@ e4e8  urit245@gmail.com       urit245@gmail.com*
     expect(stateOf('NeedsLogin'), TailscaleState.needsLogin);
     expect(stateOf('NeedsMachineAuth'), TailscaleState.needsApproval);
     expect(stateOf('Stopped'), TailscaleState.stopped);
+    expect(stateOf('Starting'), TailscaleState.connecting);
+    expect(stateOf('NoState'), TailscaleState.connecting);
+    expect(stateOf('InUseOtherUser'), TailscaleState.otherUser);
+    expect(stateOf('SomethingNew'), TailscaleState.unreadable);
+  });
+
+  test('CLI output that is not a status is unreadable, not "turned off"', () {
+    TailscaleState stateOf(int code, String out, String err) =>
+        tailscaleStatusFromCli(code, out, err).state;
+    expect(stateOf(0, '{"BackendState": "Running"}', ''),
+        TailscaleState.running);
+    expect(
+        stateOf(1, 'The Tailscale GUI failed to start (Tailscale.CLIError '
+            'error 3.)', ''),
+        TailscaleState.unreadable);
+    expect(stateOf(0, 'not json', ''), TailscaleState.unreadable);
+    // The CLI's own words when no Tailscale service is running.
+    expect(
+        stateOf(1, '', '2026/11/21 12:18:39 failed to connect to local '
+            'Tailscale service; is Tailscale running?\n'),
+        TailscaleState.stopped);
   });
 
   test('status json gives each peer its Tailscale details', () {

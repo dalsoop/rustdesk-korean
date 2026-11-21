@@ -1,45 +1,53 @@
 This file is written in English only.
 
-# Status (2026-11-17)
+# Status (2026-11-21)
 
 ## Released
 
 | Area | State | Evidence |
 |---|---|---|
 | Android Korean soft keyboard (grapheme diff, 두벌식 to Linux, F19/F24, 한/영 button) | released since ko.1–ko.4 | 3 Flutter test files run in CI on push (green 2026-11-17); checked by hand on a Galaxy Z Fold to macOS (ko.1) and to Pop!_OS COSMIC/fcitx5 (ko.3) |
-| Desktop 한/영 → peer OS key, macOS input-source switch, local hotkey pause | released ko.5–ko.10 | Rust unit tests exist (26 in `hangul_key`, 7 in `macos_input_source`, hotkey-flag tests); not run in CI, last pass not recorded; never tested with a Windows peer |
-| Fork update check | released ko.11 | Rust unit tests exist (`fork_update`, `updater`); not run in CI |
-| ranode (on-prem + internet tabs, onboarding, sections, identity, optional Tailscale, public sign-in) | released up to ko.21 (latest release, 2026-11-17) | Flutter tests `tailscale_test`, `public_onprem_test`: 8 passed locally at PR #33 (2026-11-17); run in CI on push from ko.21 |
+| Desktop 한/영 → peer OS key, macOS input-source switch, local hotkey pause | released ko.5–ko.10 | Rust unit tests: 26 in `hangul_key` run in CI (`fork-rust-tests.yml`, push and PRs); `platform::macos` (13, input source and hotkey flags) Mac-only; all passed on m5m1 2026-11-21 at 223d2e56; never tested with a Windows peer |
+| Fork update check | released ko.11 | Rust unit tests `fork_update` (4), `updater` (3) run in CI (push and PRs); passed on m5m1 2026-11-21 |
+| ranode (on-prem + internet tabs, onboarding, sections, identity, optional Tailscale, public sign-in) | released up to ko.22 (latest release, 2026-11-21) | Flutter tests `tailscale_test`, `public_onprem_test`: 8 passed locally at PR #33 (2026-11-17); run in CI on push from ko.21. ko.22 signed build checked live on m5m1 (opened with `open -b` and from a terminal: device list and "Tailscale: … 연결됨") and on m5m2 after install (device list) |
 | Main app shown as "RustDesk (for korean)" | released ko.19 | installed on the owner's Macs |
 
-## Merged or in PR, not released
+## Merged, not released
 
-- ko.21 is released (2026-11-17): ranode recovers by itself when Tailscale stops answering (PR #33);
-  the unreleased renames were reverted (#32).
-- ko.22 (version `1.5.0+6822`, merged as PR #35): ranode reads Tailscale when opened from Finder,
-  the Dock or at login (`TERM=dumb` for the CLI).
+- ko.22 is released (2026-11-21, release `1.5.0-ko.22` on fa319e09, the merge of PR #35, marked
+  Latest): ranode reads Tailscale when opened from Finder, the Dock or at login (`TERM=dumb` for
+  the CLI). All four platforms, built, signed and published on m5m1. Live-checked only with
+  Tailscale up; the stopped, restarting and absent states were not exercised, because stopping
+  Tailscale on a Mac cuts the SSH path the agents and other sessions use.
 - ko.23 (version `1.5.0+6823`, merged): ranode also accepts incoming connections from the tailnet
   with its permanent password only; left pane "이 Mac에 접속받기"; `--set-permanent-password`.
-- ko.24 (version `1.5.0+6824`, in PR to `feat/sync-upstream-1.5.0`, not merged; awaiting merge): ranode accepts ID connections like the main app (per-Mac
+  Built: Rust compiled in the Windows/Linux CI build; Flutter tests green in CI; the Rust unit
+  tests (`public_flavor`, 5) passed on `m5m1` on 2026-11-21 at 223d2e56 and run in CI from then.
+- ko.23 also carries the client-visible fixes of the 2026-11-21 QA (merged after PR #36, no
+  version bump): own states for connecting, unreadable output and another user; re-reads every
+  30 s while running and on every tab; the tab follows a tailnet switch made outside the app; a
+  failed tailnet-list read keeps the last list and nothing is saved under an empty tailnet; a
+  port-check timeout is "접속 불가", never a remembered "RustDesk 없음"; shared-in devices with a
+  duplicate short name; Homebrew `tailscaled` preferred over a leftover app; Korean wording; the
+  update card's app name. Flutter tests passed on m5m1 (54); the live checks are in item 1 below.
+- msi Cancel fix (issue #10, error 2866) and the signing script's LaunchServices cleanup: merged
+  for the next release; the msi builds in CI, the Windows PC check and the first real signing run
+  are open in `findings.md`.
+- ko.23 incoming fixes of the same QA: a Tailscale-range peer must arrive on the Tailscale
+  interface with the route back through it (decision 0009); Tailscale IPv6 peers accepted; the
+  card shows a busy 21118 and an unsettled Tailscale, and its texts match what is enforced.
+  `cargo test --lib public_flavor` (6) passed on m5m1.
+- ko.24 (version `1.5.0+6824`, PR #37): ranode accepts ID connections like the main app (per-Mac
   whitelist and approve mode via `--set-incoming-policy`, floor adds
-  `allow-remote-config-modification=N`); the left pane shows the ID.
-- ko.23 and ko.24 ship as internal builds (operations, internal builds), signed with the stable
-  "ranode internal signing" identity; a Developer ID release is optional and later. Rust compiled
-  in the Windows/Linux CI build; Flutter tests green in CI. CI's Rust test workflow is disabled, so
-  the `public_flavor` unit tests of ko.23 and ko.24 have never run.
+  `allow-remote-config-modification=N`); the left pane shows the ID. Office-subnet peers get the
+  decision 0009 rule too (own address in that subnet, non-tunnel interface, route back through
+  it). Not released: it needs its own release with the live checks below and the machine cutover.
 
 ## Remaining, in order
 
-1. **ko.22 release (handed to the owner)**: build, sign and release the merge commit of PR #35
-   (`version: 1.5.0+6822`) on the owner's release Mac, the same way as ko.21. Before marking it
-   Latest, launch the signed ranode from Finder with Tailscale up (device list appears), stopped,
-   restarting and absent (each shows its own state), and once from a terminal (unchanged). Mark
-   Latest only after that check passes. Optional once ko.24 is installed internally.
-2. **ko.24 internal build (machine-setup cycle)**, once the ko.24 PR is merged, on the company
-   build Mac: first `cargo test --lib public_flavor` on the merge commit (must pass; first run of
-   the ko.23 and ko.24 tests), then `ranode-build` signed with the stable internal identity (`codesign -dv` shows it,
-   never ad-hoc). ko.23 is not built separately: ko.24 contains it.
-3. **ko.23 live checks, on that internal build, before the cutover**:
+1. **ko.23 release**: on the release Mac `m5m1`, from the merge commit of
+   the ko.23 PR (`version: 1.5.0+6823`): run `cargo test --lib public_flavor` (must pass; passed at
+   223d2e56), build both macOS apps, sign, then on the signed ranode check:
    1. another tailnet Mac connects by this Mac's Tailscale IP + permanent password and controls it;
    2. a connection relayed through the public server (non-allowed address) is refused;
    3. with the main app running, ranode works outgoing and does not take 21118;
@@ -49,15 +57,35 @@ This file is written in English only.
       "지금은 접속받지 않음 (서비스 중지됨)";
    6. `--set-permanent-password` with the password on stdin sets it (exit 0), exits non-zero with
       ranode quit, and is refused under sudo;
-   7. a one-time password is refused; the permanent password works.
-4. **Machine-setup cutover**, per Mac: install the internal build, grant Screen Recording,
-   Accessibility and Input Monitoring, run the cutover (operations), add ranode as a login item.
-   The main app is removed from every Mac — done in the machine-setup repo.
-5. **ko.24 live checks, on that internal build, after the cutover** (operations, "Cutover keeping
-   the Mac's ID"):
+   7. a one-time password is refused; the permanent password works;
+   8. launched from Finder, with the window open: turning Tailscale off in its menu shows
+      "Tailscale이 꺼져 있습니다" within about 30 s, turning it on shows "연결하는 중입니다" (if
+      caught) and then the list; switching tailnet in the Tailscale menu shows the new tailnet,
+      not a switch screen back;
+   9. a tailnet Mac with ranode quit shows "RustDesk 없음"; a peer whose firewall drops 21118 shows
+      "접속 불가" under "RustDesk 응답 없음" and is not remembered;
+   10. with a newer Latest release, the update card names "RustDesk (forked ranode)";
+   11. another tailnet Mac connects by this Mac's Tailscale IPv6 address too; a LAN host given a
+       100.70.0.x alias (`ifconfig en0 alias`, removed afterwards) is refused both at this Mac's
+       LAN address and at its Tailscale IP routed over the LAN (decision 0009);
+   12. with the main app holding 21118, the card shows the busy-port line in red; before a
+       password is set it says only a click at the Mac lets a device in.
+   Mark Latest only after all pass.
+2. **Machine-setup cutover (after ko.23 is released)**, for each owner Mac: install ko.23 ranode;
+   grant it Screen Recording, Accessibility and Input Monitoring; quit and remove the main app
+   (and its LaunchAgent/LaunchDaemon where installed) before (re)starting ranode, because ranode retakes a busy 21118 only at its next start; start
+   ranode and add it as a login item; set the vault password with `--set-permanent-password`
+   (stdin, as the user, ranode running); verify from another tailnet Mac.
+3. Removal of the main app from the owner's Macs and the switch of their setup (permissions,
+   options, password) to ranode — done in the machine-setup repo after ko.23.
+4. **ko.24 release** (public release on `m5m1`, or an internal build per operations "Internal
+   builds"), from the merge commit of PR #37: `cargo test --lib -- hangul_key fork_update
+   public_flavor updater` and `platform::macos` on a Mac, then on the signed ranode, after the
+   cutover (operations, "Cutover keeping the Mac's ID"):
    1. Craft Mac: by the kept ID from inside the office, password only, no click offered; by
       Tailscale IP;
-   2. Craft Mac: by ID from outside the office → refused;
+   2. Craft Mac: by ID from outside the office → refused; an office-range peer sent to the Craft
+      Mac's Tailscale IP → refused (decision 0009 addendum);
    3. own Mac: Tailscale IP works and click-accept is offered;
    4. the card shows the ID; `--set-incoming-policy` prints the expected line, exits 2 with ranode
       running and 1 for a public subnet;
@@ -65,5 +93,4 @@ This file is written in English only.
 
 ## Blockers
 
-- None. The release Mac that signed ko.21 is not reachable from the company tailnet; releases run
-  where ko.21 was built.
+- None. The release Mac is `m5m1`; agents build, sign and release there (`docs/operations.md`).

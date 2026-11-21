@@ -2,58 +2,92 @@ This file is written in English only.
 
 # Findings
 
-## Where the release Macs are is not recorded
+## Unmerged branches kept after the 2026-11-21 cleanup
 
-- Condition (2026-11-17): releases up to ko.21 were built and signed on a Mac with the toolchain
-  under `~/work/sdk` (paths embedded in the ko.21 binaries; Developer ID signature time 15:13 KST).
-  The company Mac Studio with the same host and user name has no `~/work/sdk`, no SOPS checkout and
-  no age key, so the release Mac is a different machine, most likely on the owner's personal
-  tailnet, and the agents that set up company machines cannot reach it.
-- Blast radius: an agent planning a release cannot tell which Mac or session builds and signs, and
-  may wrongly conclude that releases are blocked (this happened on 2026-11-17).
-- Why not now: which Mac this is, and whether its keys sit in personal stores, is for the owner to
-  confirm; nothing was moved.
-- Approach: the owner confirms the release Mac and its tailnet; the role binding is then written
-  where the owner keeps the device table, and this item closes.
+- Condition: on 2026-11-21 (owner's go-ahead in session m5m1: "그거 pr 이랑 이슈 다 해소했나봐봐")
+  33 remote branches were deleted: every branch fully merged into the default branch, and six
+  unmerged ones whose content is superseded by merged work (list below). PR #19 was already closed
+  (2026-11-12). 14 branches remain: the default branch; `release/ko.9` and `release/ko.10` (merged
+  release PR branches whose merge commits carry tags `1.5.0-ko.9` and `1.5.0-ko.10`);
+  `release/ko19` (tag `1.5.0-ko.20`, hotfix base); `feat/ko24-ranode-id-incoming` (open PR #37);
+  and nine unmerged branches with no merged replacement:
+  - `auto-update-webpki-roots` (18f5f72b): a commit from the now-disabled "Update webpki-roots"
+    workflow; upstream merged its own updates (#16713, #17074), which arrive with the next sync.
+  - `fix/wayland-pipewire-latch` (b2612262): a fork-authored Wayland fix, never proposed or merged.
+  - Upstream feature mirrors whose upstream PR was closed unmerged or is still open:
+    `dxgi-reuse-staging-texture` (#15957 closed), `fix-texture-lifetime` (#15851 open),
+    `fix-unzoomed-cursor-dpi` (#16144 closed), `fix/16073-ipc-exe-check-eacces` (#16088 closed),
+    `svt-av1` (#15656 closed), `sciterjs` (2022, no merged PR), `keyboard-shortcuts` (upstream #14933
+    merged, but that merge is not in the default branch yet).
+- Blast radius: an agent may still pick one of these as a base.
+- Why not now: none is superseded by something merged, so deleting them needs a decision on each.
+- Approach: decide per branch (the webpki-roots bot branch can go once a sync brings upstream's
+  roots; `fix/wayland-pipewire-latch` needs a keep-or-drop decision); `keyboard-shortcuts` can go
+  once an upstream sync contains #14933.
+- Restore record of the deleted branches (`git push origin <sha>:refs/heads/<branch>`; also in
+  `~/tmp/rdk-hygiene/deleted-branches.tsv` on m5m1). Merged into the default branch:
+  `ci/desktop-build-cache` b20dcbdee63cad0c39ef826229e7ec5a479df6b1,
+  `docs/fork-project-docs` 74db0f52d28d19a51e7979377a16600773a4bfdf,
+  `feat/android-korean-toggle-key` a578c38b83fea55da3450548763a79ebe39db421,
+  `feat/for-korean-connect` ad80258b864cf0030fc8aea70cd6481d55cbbf02,
+  `feat/for-korean-identifiers` 430d060b6fbee5b4e49f5d64f4c4f80c1fda30f7,
+  `feat/fork-update-check` 8b6766f76d3d303e85f56fa66131b63275b61e44,
+  `feat/keyboard-settings-clarity` 0fb5279f8a797b5014b127a05778c4d3997683e3,
+  `feat/ko23-ranode-incoming` a29d06b6534c7ecd3303bc09f9602b307a672a4e,
+  `feat/macos-hangul-keys` 12fcffdb17384a243dbacc62fc7ff0c49b723ccd,
+  `feat/macos-korean-toggle` 711b26ba2edaf1ba34fc3bcf7b1d3ad382d4b611 (also tag `1.5.0-ko.8`),
+  `feat/main-identity` eca1a6060ff4983ca74144c7de4b5e698c602455,
+  `feat/public-device-sections` fb7283b9c719e2eaece070b045d3913036f3a30d,
+  `feat/public-display-name` 5aa099401427579753053ea4e66f5d6b4f6c2b85,
+  `feat/public-identity` 86488aacd6ed5aee17ad1a59b192687a37fad572,
+  `feat/public-onboarding` 1721454cf2f23e467fd39e67946031ed6492ee5a,
+  `feat/public-tailscale-optional` dbd145f457b2fdc448b437e6f0fbfad4e60ffee5,
+  `fix-android-korean-ime` a9c5ae7c57c1f2db1a915681aefb396d37afb453,
+  `fix/for-korean-public-login` 9e7edf20061acdeb1f938ce450c6c8473c84da88,
+  `fix/input-source-2-grab-race` 2d00c18d2b3b313da98dfe807beb471a7538ff4c,
+  `fix/ko21-tailscale-term` 86db16f58a327ac75c2c82778ae177b518afcdfd,
+  `fix/ko9-deb-version` 47899a7b37b6679629410a62e635259ff397eca3,
+  `fix/macos-remote-hangul-hotkey` 5fe20fbb2c692b921fc8906fa6b9fdb7b75674fa,
+  `fix/macos-server-keepalive` 5a1fd20f700f881d7358c7b2c05ddb68cfe1660a,
+  `fix/main-app-name` c2da16cb06b31dacceb80cdb9969d8c3191ea932,
+  `fix/main-app-name-for-korean` fda258b6d602cd823f924243631a778955cad6a0,
+  `fix/soft-keyboard-grapheme-diff` ba9c8a691b6e4f33c0f840cee63d51edaf31eb5e,
+  `master` a9c5ae7c57c1f2db1a915681aefb396d37afb453 (same head as `fix-android-korean-ime`).
+  Unmerged but superseded:
+  `fix/macos-tailscale-localapi` 4faad961949c6245bdfd50a9cad143fff56c6c55 (PR #19, closed,
+  superseded by #35), `hotfix/ko20-public-login` fdc7349d4415084b762ede8684b16e98f79c1276 (merged
+  into `release/ko19` by #30, ported by #31), `webrtc` 7dc127c00faf8103e973423c94eadc453d33fe85 and
+  `worktree-port-forward-shared-conn` c2927046f80ec7b360663f6f41c81e6974f0cc4f (each the final head
+  of upstream #15684 / #16062, whose merges ae6af2de / 3fc11c0f are in the default branch),
+  `hdr-tonemap` ce968c02dd62c9246ad30f047f7f68b60243513a and
+  `temporary-password-rotates-at-authorization` 2637003859127891a0dcf369fd3e0d25f67cc494 (earlier
+  iterations of upstream #16033 / #16080, merged later as 58ff78a8 / d4ac2c07, in the default
+  branch).
 
-## Obsolete Android workflows can still be run
+## The msi fix for error 2866 is not checked on a Windows PC
 
-- Condition: `sign-apk.yml` (manual trigger) signs with a throwaway keystore (password 123456) and
-  uploads to release `v1.5.0-korean-fix`; `build-android-arm64.yml` triggers on the stale branch
-  `fix-android-korean-ime`.
-- Blast radius: one manual run publishes an APK whose certificate differs from the pinned one, so it
-  cannot install as an update on the owner's phone.
-- Why not now: removing workflows needs the owner's OK.
-- Approach: delete both workflows in a separate change.
+- Condition: issue #10 (msi over an exe-installed RustDesk stopped with Windows Installer error
+  2866 instead of showing "please uninstall it first") is fixed by publishing `EndDialog` `Exit`
+  from `UI_AnotherAppDialog`'s Cancel (PR #43, 2026-11-21). The msi builds in
+  the fork's Windows CI; no Windows PC was available to run it.
+- Blast radius: if the dialog still fails, an msi install over an exe install ends in a generic
+  failure (1603) as before; nothing else changes.
+- Why not now: no Windows PC is available to this work.
+- Approach: on the next Windows PC test, follow issue #10's "Verify a fix": on a PC with an
+  exe-installed RustDesk, `msiexec /i <msi>` shows the dialog, Cancel ends setup with 1602 and no
+  2866 appears in the MsiInstaller events; `msiexec /i <msi> /qn` still fails with the
+  `BlockSelfInstalledApp` message in the log. Do not uninstall someone's existing RustDesk to test.
 
-## Fork Rust tests are not in CI, and CI does not run on pull requests
+## The signing script's LaunchServices cleanup is not yet seen in a real signing run
 
-- Condition: `flutter-unit-test.yml` runs the 5 fork Flutter test files on push, but no job runs the
-  fork's Rust tests, and `ci.yml` is set for `pull_request` but no pull-request run appears in the
-  Actions history.
-- Blast radius: regressions in the Rust key mapping, ranode core and update check reach the default
-  branch unnoticed.
-- Why not now: a Rust test job needs the vcpkg/toolchain setup of the desktop build; not part of the
-  Finder fix (ko.22).
-- Approach: add a `cargo test --lib` job for the fork modules in a separate change.
-
-## Upstream scheduled workflows fail on the fork
-
-- Condition: "Flutter Nightly Build" ends in `startup_failure` on every schedule; "Update
-  webpki-roots" fails.
-- Blast radius: failures that matter are hidden among the scheduled ones in the Actions list.
-- Why not now: disabling them means editing upstream workflow files or the repository settings;
-  owner's call.
-- Approach: disable the two schedules in the repository's Actions settings (no file change).
-
-## Stale branches and a superseded PR
-
-- Condition: 45 remote fork branches, 16 of them unmerged (upstream-feature names and finished
-  fork topics); PR #19
-  (Tailscale LocalAPI) is superseded by the ko.22 Finder fix and carries the unmerged `macos-public.yml`.
-- Blast radius: an agent may pick an old branch as a base.
-- Why not now: deleting branches cannot be undone; PR #19 is closed when the ko.22 fix merges.
-- Approach: the owner approves a list of branches to delete.
+- Condition: `res/osx-sign-notarize.sh` now unregisters its stage copy (`lsregister -u`) in the
+  exit trap (2026-11-21; before, each run left a dead record per bundle id). Checked on m5m1 only
+  with a dummy bundle and an early-failing run, not with a real sign and notarize.
+- Blast radius: if a record still survives, `open -b`, Gujo Cloud Apps or `rustdeskpublic://`
+  links can resolve to a missing copy, as before.
+- Why not now: the next real run is the next release.
+- Approach: after the next release's two signing runs on m5m1, `lsregister -dump` shows no path
+  under `~/tmp/osx-sign.*`; then remove this entry.
 
 ## Stale "owner's own server" claims about the main app
 
@@ -65,3 +99,17 @@ This file is written in English only.
 - Blast radius: an agent planning the main-app removal or ID access reads the wrong server.
 - Why not now: outside ko.24's change scope (found in its final review).
 - Approach: reword the two rows and the comment in the next ranode cycle.
+
+## The office subnet trusts any LAN with the same numbering
+
+- Condition: from ko.24 a Craft Mac's ranode accepts peers from its listed office subnet when the
+  connection arrives on the Mac's own address in that subnet on a non-tunnel interface, with the
+  route back through it (the decision 0009 rule applied to the subnet). A private range does not
+  prove which LAN it is: on another network with the same numbering, devices that know the Mac's
+  permanent password could connect.
+- Blast radius: only a Craft Mac moved out of the office onto such a network; the owner's own
+  Macs list no office subnet. The permanent password is still required (approve mode `password`).
+- Why not now: binding the subnet to one network (gateway MAC, Wi-Fi SSID) needs new state; the
+  Craft Macs are fixed office Macs.
+- Approach: revisit if a Craft Mac ever leaves the office; the machine setup can clear the subnet
+  with `--set-incoming-policy --extra-subnets none`.
