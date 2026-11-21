@@ -63,7 +63,8 @@ them can listen at a time.
 
 ## Boundaries
 
-- What crosses into the owner's devices: only connections from 100.64.0.0/10 to port 21118, or via
+- What crosses into the owner's devices: only connections from 100.64.0.0/10 (ranode also
+  fd7a:115c:a1e0::/48) to port 21118, or via
   the owner's server inside Tailscale. ranode stays registered with the public RustDesk server, but
   a peer reaching it that way has a non-Tailscale address and is refused by the whitelist. A
   Tailscale-range address that reaches ranode outside its Tailscale interface is refused as well

@@ -1361,7 +1361,8 @@ async fn direct_server(server: ServerPtr) {
         ) || option2bool("stop-service", &Config::get_option("stop-service"));
         if !disabled && listener.is_none() {
             port = get_direct_port();
-            match hbb_common::tcp::listen_any(port as _).await {
+            // Korean fork: ranode binds without SO_REUSEPORT (upstream's listen_any elsewhere).
+            match crate::public_flavor::listen_direct(port as _).await {
                 Ok(l) => {
                     listener = Some(l);
                     crate::public_flavor::set_direct_listener(true);

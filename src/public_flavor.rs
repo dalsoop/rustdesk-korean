@@ -195,34 +195,68 @@ fn in_tailscale_range(ip: IpAddr) -> bool {
 }
 
 // macOS names every tunnel `utunN` (the Tailscale app and Homebrew's tailscaled alike); on Linux
-// and Windows the interface is called Tailscale.
+// the interface is `tailscale0`.
 fn is_tailscale_interface_name(name: &str) -> bool {
-    name.starts_with("utun") || name.to_ascii_lowercase().starts_with("tailscale")
+    name.starts_with("utun") || name.starts_with("tailscale")
 }
 
-/// Whether `ip` is assigned to this computer's Tailscale interface: a tunnel that also carries
-/// a Tailscale IPv6 address, which other VPNs using 100.64.0.0/10 on a `utun` (Cloudflare WARP,
-/// for one) do not have. A tailnet with IPv6 turned off fails closed here.
-#[cfg(not(target_os = "ios"))]
-fn is_on_tailscale_interface(ip: IpAddr) -> bool {
-    default_net::get_interfaces().iter().any(|i| {
-        (is_tailscale_interface_name(&i.name)
-            || i.friendly_name
-                .as_deref()
-                .is_some_and(is_tailscale_interface_name))
-            && i.ipv6
+/// Whether `ip` is assigned to a Tailscale interface in `addrs` (interface name, address): a
+/// tunnel that also carries a Tailscale IPv6 address, which other VPNs using 100.64.0.0/10 on a
+/// `utun` (Cloudflare WARP, for one) do not have. A tailnet with IPv6 turned off fails closed.
+fn is_tailscale_interface_address(addrs: &[(String, IpAddr)], ip: IpAddr) -> bool {
+    addrs.iter().any(|(name, a)| {
+        *a == ip
+            && is_tailscale_interface_name(name)
+            && addrs
                 .iter()
-                .any(|n| in_tailscale_range(IpAddr::V6(n.addr)))
-            && match ip {
-                IpAddr::V4(v4) => i.ipv4.iter().any(|n| n.addr == v4),
-                IpAddr::V6(v6) => i.ipv6.iter().any(|n| n.addr == v6),
-            }
+                .any(|(n, b)| n == name && b.is_ipv6() && in_tailscale_range(*b))
     })
 }
 
-#[cfg(target_os = "ios")]
-fn is_on_tailscale_interface(_ip: IpAddr) -> bool {
-    false
+/// This computer's addresses with their interface names, straight from getifaddrs(3): cheap,
+/// unlike a full interface listing that also looks up gateways.
+#[cfg(unix)]
+fn interface_addresses() -> Vec<(String, IpAddr)> {
+    use hbb_common::libc;
+    let mut out = Vec::new();
+    let mut head: *mut libc::ifaddrs = std::ptr::null_mut();
+    // SAFETY: getifaddrs allocates the list, freeifaddrs below frees it; nodes are read only in
+    // between, and only through the pointers the list itself holds.
+    if unsafe { libc::getifaddrs(&mut head) } != 0 {
+        return out;
+    }
+    let mut cur = head;
+    while !cur.is_null() {
+        let ifa = unsafe { &*cur };
+        cur = ifa.ifa_next;
+        if ifa.ifa_addr.is_null() || ifa.ifa_name.is_null() {
+            continue;
+        }
+        let ip = match unsafe { (*ifa.ifa_addr).sa_family } as libc::c_int {
+            libc::AF_INET => {
+                let sin = unsafe { &*(ifa.ifa_addr as *const libc::sockaddr_in) };
+                IpAddr::from(sin.sin_addr.s_addr.to_ne_bytes())
+            }
+            libc::AF_INET6 => {
+                let sin6 = unsafe { &*(ifa.ifa_addr as *const libc::sockaddr_in6) };
+                IpAddr::from(sin6.sin6_addr.s6_addr)
+            }
+            _ => continue,
+        };
+        let name = unsafe { std::ffi::CStr::from_ptr(ifa.ifa_name) };
+        out.push((name.to_string_lossy().into_owned(), ip));
+    }
+    unsafe { libc::freeifaddrs(head) };
+    out
+}
+
+#[cfg(not(unix))]
+fn interface_addresses() -> Vec<(String, IpAddr)> {
+    Vec::new()
+}
+
+fn is_on_tailscale_interface(ip: IpAddr) -> bool {
+    is_tailscale_interface_address(&interface_addresses(), ip)
 }
 
 /// The address this computer sends from to reach `peer`, i.e. which interface its route uses.
@@ -286,6 +320,35 @@ pub fn set_direct_listener(listening: bool) {
 /// app does not receive until it is started again with the port free.
 pub fn direct_listener_failed() -> bool {
     DIRECT_LISTENER.load(std::sync::atomic::Ordering::Relaxed) == 2
+}
+
+/// Korean fork hook for upstream's direct listener. Upstream's `listen_any` sets `SO_REUSEPORT`,
+/// so a second app binds 21118 too and gets nothing while the first takes every connection. In
+/// ranode on macOS the bind is exclusive, so a port another app holds fails here (and the card
+/// says so). Every other build uses `listen_any` unchanged.
+pub async fn listen_direct(
+    port: u16,
+) -> hbb_common::ResultType<hbb_common::tokio::net::TcpListener> {
+    #[cfg(target_os = "macos")]
+    {
+        if is_public() {
+            return Ok(listen_exclusive(port)?);
+        }
+    }
+    hbb_common::tcp::listen_any(port).await
+}
+
+// macOS opens IPv6 sockets dual-stack (net.inet6.ip6.v6only is 0), so [::] takes IPv4 too.
+#[cfg(target_os = "macos")]
+fn listen_exclusive(port: u16) -> std::io::Result<hbb_common::tokio::net::TcpListener> {
+    use hbb_common::tokio::net::TcpSocket;
+    let (socket, addr) = match TcpSocket::new_v6() {
+        Ok(socket) => (socket, SocketAddr::from(([0u16; 8], port))),
+        Err(_) => (TcpSocket::new_v4()?, SocketAddr::from(([0, 0, 0, 0], port))),
+    };
+    socket.set_reuseaddr(true)?;
+    socket.bind(addr)?;
+    socket.listen(128)
 }
 
 /// The password for `--set-permanent-password`: the first stdin line without its line ending.
@@ -465,8 +528,28 @@ mod tests {
         assert!(!in_tailscale_range(ip("100.128.0.1")));
         assert!(!in_tailscale_range(ip("100.63.255.255")));
         assert!(!in_tailscale_range(ip("fd7a:115c:a1e1::1")));
-        assert!(is_tailscale_interface_name("utun4"));
-        assert!(is_tailscale_interface_name("tailscale0"));
-        assert!(!is_tailscale_interface_name("en0"));
+        let addrs = [
+            ("en0", "100.70.0.3"),
+            ("utun4", "100.101.2.3"),
+            ("utun4", "fd7a:115c:a1e0::3"),
+            // Cloudflare WARP: a CGNAT address on a tunnel without a Tailscale IPv6 address.
+            ("utun6", "100.96.0.7"),
+            ("tailscale0", "100.64.0.20"),
+            ("tailscale0", "fd7a:115c:a1e0::20"),
+        ]
+        .map(|(name, a)| (name.to_owned(), ip(a)));
+        assert!(is_tailscale_interface_address(&addrs, ip("100.101.2.3")));
+        assert!(is_tailscale_interface_address(
+            &addrs,
+            ip("fd7a:115c:a1e0::3")
+        ));
+        assert!(is_tailscale_interface_address(&addrs, ip("100.64.0.20")));
+        assert!(!is_tailscale_interface_address(&addrs, ip("100.70.0.3")));
+        assert!(!is_tailscale_interface_address(&addrs, ip("100.96.0.7")));
+        // getifaddrs decoding, byte order included: every host has 127.0.0.1.
+        #[cfg(unix)]
+        assert!(interface_addresses()
+            .iter()
+            .any(|(_, a)| *a == ip("127.0.0.1")));
     }
 }

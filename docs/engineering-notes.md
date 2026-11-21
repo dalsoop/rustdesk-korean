@@ -88,8 +88,11 @@ local keys kept going to the peer; release both when the mode changes (fixed ko.
 ## ranode does not take over a busy 21118 by itself
 
 - Symptom: with the main app running, ranode never accepts incoming, even after the main app quits.
-- Cause: upstream's direct listener, when the bind fails, waits only for the port number to change
-  and never retries the same port.
+- Cause: upstream's `listen_any` sets `SO_REUSEPORT`, so a second app's bind of 21118 succeeds
+  and the app that bound first takes every connection (checked on m5m1, 2026-11-21). From ko.23
+  ranode binds without it (`public_flavor::listen_direct`), so its bind fails while another app
+  holds the port and the left pane says so; upstream's listener then waits only for the port
+  number to change and never retries the same port.
 - Response: quit (and remove) the main app first, then start ranode; verify by connecting from
   another tailnet Mac.
 

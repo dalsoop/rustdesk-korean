@@ -21,7 +21,8 @@ peer whose address is in 100.64.0.0/10 or fd7a:115c:a1e0::/48:
    unsent UDP socket), so the way back runs through the Tailscale tunnel.
 
 Otherwise it is refused with upstream's "Your ip is blocked by the peer". The pinned whitelist
-becomes `100.64.0.0/10,fd7a:115c:a1e0::/48`. The listener keeps binding all interfaces.
+becomes `100.64.0.0/10,fd7a:115c:a1e0::/48`. The listener keeps binding all interfaces, but
+without `SO_REUSEPORT` (`listen_direct`), so it cannot silently share 21118 with the main app.
 
 ## Alternatives
 - Bind the direct listener to this Mac's Tailscale IP: rejected. The IP is unknown while Tailscale
@@ -45,5 +46,6 @@ becomes `100.64.0.0/10,fd7a:115c:a1e0::/48`. The listener keeps binding all inte
   affected by this check.
 - A LAN whose own subnet overlaps a tailnet peer's address breaks that peer's Tailscale path anyway;
   ranode refuses it (check 3), which is the safe side.
-- Each incoming connection costs one interface listing and one unsent UDP socket, before any
-  password prompt.
+- Each incoming connection costs one getifaddrs(3) call and one unsent UDP socket (both plain
+  syscalls, no I/O wait), before any password prompt. `default_net`'s interface listing is not
+  used: on macOS it also probes the default gateway, which can block for seconds.
