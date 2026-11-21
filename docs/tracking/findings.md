@@ -68,7 +68,7 @@ This file is written in English only.
 
 - Condition: issue #10 (msi over an exe-installed RustDesk stopped with Windows Installer error
   2866 instead of showing "please uninstall it first") is fixed by publishing `EndDialog` `Exit`
-  from `UI_AnotherAppDialog`'s Cancel (PR "fix(msi, macos signing)", 2026-11-21). The msi builds in
+  from `UI_AnotherAppDialog`'s Cancel (PR #43, 2026-11-21). The msi builds in
   the fork's Windows CI; no Windows PC was available to run it.
 - Blast radius: if the dialog still fails, an msi install over an exe install ends in a generic
   failure (1603) as before; nothing else changes.
