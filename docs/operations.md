@@ -78,10 +78,77 @@ first `.app` away before the second build overwrites the Release folder.
 ## Release ko.N
 
 Releases are made on the release Mac `m5m1` (it holds `~/work/sdk` and the signing keys). Shipping
-is delegated to agents (owner, 2026-11-06): an agent on `m5m1` builds, signs, publishes and installs
-a release from the merge commit on `feat/sync-upstream-1.5.0` without waiting for the owner's word,
-and runs the live checks on the signed build before marking it Latest. macOS builds run through the
-build queue (`build-pipeline submit … --host m5m1`), never on the M1 MacBooks.
+is delegated to agents (owner, 2026-11-06), and from 2026-11-22 the release runs by itself (owner,
+"진행", 2026-11-22, session m5m1: "버전이 올라간 커밋이 병합되면 m5m1이 빌드부터 GitHub 등록까지
+진행합니다. 서명 키는 지금처럼 m5m1 밖으로 나가지 않습니다."). macOS builds run through the build
+queue (`build-pipeline submit … --host m5m1`), never on the M1 MacBooks.
+
+### Automatic release
+
+To release ko.N, merge the PR that sets `version: 1.5.0+68NN` in `flutter/pubspec.yaml` (with the
+KOREAN.md notes and, optionally, `res/release-notes/1.5.0-ko.N.md`) into `feat/sync-upstream-1.5.0`.
+Nothing else is needed:
+
+- **Trigger**: the m5m1 LaunchAgent `net.ranode.dotfiles.rustdesk-release-watch` (machine-setup
+  repo, README "RustDesk fork release watch") reads the branch head every 15 minutes (anonymous
+  `git ls-remote` and the raw `pubspec.yaml`). When GitHub has no published release `1.5.0-ko.N`,
+  it runs `res/release-ko.py <head>` from a checkout of that head. No workflow of this public
+  repository runs on m5m1 (no self-hosted runner): only code merged to the default branch is run.
+- **Driver** `res/release-ko.py` does the steps of "By hand" below, each resumable (a step whose
+  result is already on disk and passes its checks is skipped): Windows/Linux files from the
+  "Build desktop" run on the commit (started with `workflow_dispatch` when the push was docs-only
+  and the branch head is still that commit; a failed run is re-run once); the upstream-mono MR that
+  moves `rustdesk/` to the commit, put in its merge queue (a blocked, held or draft MR stops the run
+  with its link; it is never re-queued), and the unsigned APK of the newest `rustdesk:android-arm64`
+  job on a main pipeline whose `rustdesk/` equals the commit's tree file by file, signed with
+  `res/android-sign-release.sh`; both
+  macOS apps built through the build queue (`res/release-ko-build-macos.sh`) and signed, notarized
+  and zipped with `res/osx-sign-notarize.sh`; checks of every file; `.sha256` files; notes; a draft
+  release with the 12 files, GitHub's sha256 of each compared with ours; then publish and Latest.
+- **Checks before Latest** (all automatic): macOS zips hold exactly `RustDesk.app` / `RustDesk
+  (forked ranode).app` with the bundle id, `1.5.0` and build `68NN`, `codesign --verify --deep
+  --strict`, team `V2Z46YY386`, `spctl` "Notarized Developer ID", stapled; the APK has versionName
+  `1.5.0-ko.N`, versionCode `68NN+2000`, the pinned certificate and v1–v3 signatures; the deb's
+  package version is `1.5.0+koN`; LaunchServices lists no build or signing copy of either bundle id;
+  the process listening on TCP 21118 (the Mac's receiving RustDesk) is the same as at the start.
+  The UI check of the new ranode is **skipped** on m5m1: its installed ranode receives remote
+  sessions, and a second ranode would share its IPC socket (`/tmp/RustDeskPublic-<uid>/`), ID
+  and settings, while the main-app bundle would register the same ID; so the live checks happen
+  after the machine-setup repo installs the release (operations of that repo).
+- **Notes**: `res/release-notes/1.5.0-ko.N.md` at the release commit when present (first line
+  `# <short title>`, the rest is "what changed"); otherwise the titles of the PRs merged since the
+  previous release. The version numbers and the file list are always added.
+- **Waiting and failures**: a run waits at most 10 minutes for GitHub Actions, the upstream-mono
+  merge queue or the Android job, then ends with exit 75; the next tick continues. A failed run is
+  retried after an hour, a refused one (commit not on the branch, bad version line) not until the
+  head changes. Start, waiting, failure and success are posted in ranode-corp `#970-에이전트-작업`,
+  thread `1795280360.472489`.
+- **Work folder** `~/work/rdk-release` (external drive): `repo/` (fork clone), `build/` (build
+  checkout, `target/` kept between releases), `upstream-mono/`, `tools/` (the trigger's checkout),
+  `1.5.0-ko.N/` (`assets/`, `logs/run-*.log`, `notes.md`, `result.json`), `last-result.json`.
+- **Stop it**: `touch ~/.config/rustdesk-release-watch/off` on m5m1 (remove the file to resume).
+
+### By hand
+
+Run the driver on m5m1 from any checkout of the default branch (it waits up to 3 hours per wait by
+default; `--wait-seconds` changes that):
+
+```sh
+/usr/bin/python3 -I res/release-ko.py <commit>                 # full release, same as the trigger
+/usr/bin/python3 -I res/release-ko.py --dry-run <commit>       # build, sign, check; no GitHub/GitLab writes
+/usr/bin/python3 -I res/release-ko.py --draft-only <commit>    # stop after the draft and its checks
+/usr/bin/python3 -I res/release-ko.py --draft-only --release-tag 1.5.0-ko.N-test <commit>   # throwaway draft; delete it after
+```
+
+`--dry-run` also runs for a release that exists and compares its files with the published ones.
+Before a hand run on a ko.N the watch has not released yet, create the stop file above: otherwise the
+watch publishes a `--draft-only` draft at its next tick, and a run on another commit of the same ko.N
+moves the watch's release folder aside (kept as `1.5.0-ko.N.<commit>-<time>`). The driver accepts
+only first-parent commits of the branch (merge results), never a commit from inside a merged PR.
+Exit 0 done, 1 failed (see `~/work/rdk-release/1.5.0-ko.N/logs/`), 2 refused, 75 waiting.
+`launchctl kickstart gui/$(id -u)/net.ranode.dotfiles.rustdesk-release-watch` runs one tick now.
+
+The steps it automates:
 
 1. Merge the PR that sets `version: 1.5.0+68NN` in `flutter/pubspec.yaml` (and the KOREAN.md notes)
    into `feat/sync-upstream-1.5.0`. CI then builds Windows/Linux artifacts.
@@ -103,8 +170,9 @@ build queue (`build-pipeline submit … --host m5m1`), never on the M1 MacBooks.
    `rustdesk-1.5.0-ko.N-x86_64.exe`, `…-x86_64.msi`, `…-x86_64.deb` (CI names them
    `rustdesk-1.5.0-ko-windows-x86_64` etc.; the Windows updater needs the exact names), write a
    `.sha256` for each, then create GitHub release `1.5.0-ko.N` on that commit with the macOS zips,
-   Windows/Linux files, APK, and every `.sha256`; title in Korean naming what changed. Mark it Latest only when it is
-   meant to reach the update check.
+   Windows/Linux files, APK, and every `.sha256`; title in Korean naming what changed. The driver
+   creates it as a draft and marks it Latest after the checks above (every release is meant to reach
+   the update check; to hold one back, stop the watch before merging the version PR).
 6. Roll out: the owner's Macs pin version + sha256 per app in their machine-setup repo; the office
    Linux server pins `versions.rustdesk` (`1.5.0+koN`), sha256 and URL in its infrastructure repo.
 
