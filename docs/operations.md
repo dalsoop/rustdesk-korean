@@ -11,7 +11,7 @@ This file is written in English only.
   Xcode command-line tools, Android build-tools 34.0.0 and JDK 17.
 - Both roles are played by the owner's Mac Studio `m5m1` (checked 2026-11-21: it holds `~/work/sdk`
   with Flutter 3.24.5, vcpkg, Android build-tools and JDK 17, the SOPS checkout and age key, the
-  Developer ID and `bwsx`; ko.21 and ko.22 were built, signed and released there by agents). The
+  Developer ID and `bwsx`; ko.21 to ko.23 were built, signed and released there by agents). The
   owner's device table in the machine-setup repo stays the binding if this changes.
 - The signing scripts' defaults are set for `m5m1`. On any other Mac override:
 
