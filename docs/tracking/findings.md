@@ -64,13 +64,27 @@ This file is written in English only.
   iterations of upstream #16033 / #16080, merged later as 58ff78a8 / d4ac2c07, in the default
   branch).
 
-## The macOS signing script leaves LaunchServices records behind
+## The msi fix for error 2866 is not checked on a Windows PC
 
-- Condition (2026-11-17, again 2026-11-21): `res/osx-sign-notarize.sh` copies the app to a stage
-  folder under `~/tmp/osx-sign.*`, which macOS registers with LaunchServices, and deletes the folder
-  on exit without unregistering it. Each run leaves a dead record per bundle id (two after ko.22;
-  removed by hand with `lsregister -u`).
-- Blast radius: a stale record with the installed app's bundle id can make `open -b`, Gujo Cloud
-  Apps or `rustdeskpublic://` links resolve to a missing or unsigned copy.
-- Why not now: a script change is outside a release; the records were cleaned after the run.
-- Approach: unregister the stage copy (`lsregister -u`) in the script's exit trap.
+- Condition: issue #10 (msi over an exe-installed RustDesk stopped with Windows Installer error
+  2866 instead of showing "please uninstall it first") is fixed by publishing `EndDialog` `Exit`
+  from `UI_AnotherAppDialog`'s Cancel (PR #43, 2026-11-21). The msi builds in
+  the fork's Windows CI; no Windows PC was available to run it.
+- Blast radius: if the dialog still fails, an msi install over an exe install ends in a generic
+  failure (1603) as before; nothing else changes.
+- Why not now: no Windows PC is available to this work.
+- Approach: on the next Windows PC test, follow issue #10's "Verify a fix": on a PC with an
+  exe-installed RustDesk, `msiexec /i <msi>` shows the dialog, Cancel ends setup with 1602 and no
+  2866 appears in the MsiInstaller events; `msiexec /i <msi> /qn` still fails with the
+  `BlockSelfInstalledApp` message in the log. Do not uninstall someone's existing RustDesk to test.
+
+## The signing script's LaunchServices cleanup is not yet seen in a real signing run
+
+- Condition: `res/osx-sign-notarize.sh` now unregisters its stage copy (`lsregister -u`) in the
+  exit trap (2026-11-21; before, each run left a dead record per bundle id). Checked on m5m1 only
+  with a dummy bundle and an early-failing run, not with a real sign and notarize.
+- Blast radius: if a record still survives, `open -b`, Gujo Cloud Apps or `rustdeskpublic://`
+  links can resolve to a missing copy, as before.
+- Why not now: the next real run is the next release.
+- Approach: after the next release's two signing runs on m5m1, `lsregister -dump` shows no path
+  under `~/tmp/osx-sign.*`; then remove this entry.
