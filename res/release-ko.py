@@ -243,8 +243,33 @@ def gl_api(path, method="GET", out_file=None, fields=None):
         if p.returncode != 0:
             raise Failed("glab api %s: exit %d" % (path.split("?")[0], p.returncode))
         return None
-    p = run(cmd, timeout=300)
-    return json.loads(p.stdout) if p.stdout.strip() else None
+    # GitLab objects may carry secrets: the raw response is never printed or kept. Only the fields this driver uses
+    # leave this function, and a failure reports the exit code alone.
+    p = run(cmd, timeout=300, check=False)
+    if p.returncode != 0:
+        raise Failed("glab api %s %s: exit %d" % (method, path.split("?")[0], p.returncode))
+    try:
+        data = json.loads(p.stdout) if p.stdout.strip() else None
+    except ValueError:
+        raise Failed("glab api %s %s: unreadable answer" % (method, path.split("?")[0]))
+
+    def pick(o):
+        return {k: o.get(k) for k in GL_FIELDS} if isinstance(o, dict) else o
+
+    return [pick(o) for o in data] if isinstance(data, list) else pick(data)
+
+
+# The GitLab fields the driver reads (pipelines, jobs, merge requests).
+GL_FIELDS = ("id", "iid", "sha", "name", "status", "artifacts", "artifacts_expire_at", "source_branch", "labels",
+             "draft", "work_in_progress", "web_url", "description", "state")
+
+
+def gitlab_manager(args, cwd):
+    """Runs gitlab-manager; a failure reports the exit code only (its output can echo GitLab objects)."""
+    p = run(["gitlab-manager"] + args, cwd=cwd, check=False, timeout=600)
+    if p.returncode != 0:
+        raise Failed("gitlab-manager %s: exit %d (output not shown)" % (" ".join(args[:2]), p.returncode))
+    return p.stdout
 
 
 def proj(project):
@@ -610,7 +635,7 @@ class Release:
                             else "/".join(sorted(labels & {"merge-queue-blocked", "merge-queue-hold"})),
                             mr["web_url"]))
         if "merge-queue" not in labels and not self.args.dry_run:
-            run(["gitlab-manager", "merge-queue", "add", str(mr["iid"]), "--repo", UM_PROJECT], cwd=self.um)
+            gitlab_manager(["merge-queue", "add", str(mr["iid"]), "--repo", UM_PROJECT], self.um)
             log("put upstream-mono !%d in the merge queue" % mr["iid"])
 
     def subtree_mr(self, split):
@@ -680,11 +705,11 @@ class Release:
             mr = gl_api("%s/merge_requests/%d" % (proj(UM_PROJECT), mr["iid"]), method="PUT",
                         fields={"description": desc, "title": title})
         else:
-            out = run(["gitlab-manager", "mr", "create", "--repo", UM_PROJECT, "--source", branch, "--target", "main",
-                       "--title", title, "--description", desc], cwd=self.um).stdout
+            out = gitlab_manager(["mr", "create", "--repo", UM_PROJECT, "--source", branch, "--target", "main",
+                                  "--title", title, "--description", desc], self.um)
             m = re.search(r"https://\S+/-/merge_requests/(\d+)", out) or re.search(r'"iid":\s*(\d+)', out)
             if not m:
-                raise Failed("could not read the new MR from gitlab-manager: %s" % tail(out, 2))
+                raise Failed("gitlab-manager mr create gave no MR number (output not shown)")
             mr = gl_api("%s/merge_requests/%d" % (proj(UM_PROJECT), int(m.group(1))))
         self.result["upstream_mono_mr"] = mr["web_url"]
         # After a push the queue takes a blocked MR back by itself; a held or draft MR waits for a person.
