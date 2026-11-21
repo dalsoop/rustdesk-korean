@@ -12,7 +12,7 @@ This file is written in English only.
 | ranode (on-prem + internet tabs, onboarding, sections, identity, optional Tailscale, public sign-in) | released up to ko.24 (latest release, 2026-11-22) | Flutter tests `tailscale_test`, `public_onprem_test` run in CI on push and PRs. ko.22 signed build checked live on m5m1 (opened with `open -b` and from a terminal: device list and "Tailscale: … 연결됨") and on m5m2 after install (device list); ko.23 signed build checked live on m5m1 (below) |
 | ranode incoming from the tailnet (Tailscale interface and return route, IPv6 tailnet range, permanent password only, exclusive 21118, left-pane card) | released ko.23 (2026-11-21); receiving on m5m1 since its cutover (2026-11-22) | Rust tests `public_flavor` passed on m5m1 at 80d94a8b and 6b6ed6c7 and in CI. Live on m5m1 after the cutover: below ("ko.24 release and m5m1 cutover") |
 | ranode incoming by RustDesk ID, per-Mac incoming policy, relayed incoming refused, ID on the card | released ko.24 (2026-11-22) | Fork Rust tests (42) and `platform::macos` (13) passed on m5m1 at 6b6ed6c7; CI green. Live on m5m1: below |
-| Windows msi Cancel fix (issue #10, error 2866) | released ko.23 | msi built in CI; not checked on a Windows PC (`findings.md`) |
+| Windows msi Cancel fix (issue #10, error 2866) | released ko.23 | msi built in CI. Checked live on 2026-11-22 with the ko.24 msi on a Windows 11 VM over an exe-installed RustDesk: full UI showed the "uninstall it first" dialog and Cancel ended setup with 1602, no 2866 in the log or the MsiInstaller events; `/qn` failed with 1603 and the `BlockSelfInstalledApp` message (issue #10 comment) |
 | Main app shown as "RustDesk (for korean)" | released ko.19 | installed on the owner's Macs |
 
 ## Merged, not released
