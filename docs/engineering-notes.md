@@ -95,6 +95,9 @@ local keys kept going to the peer; release both when the mode changes (fixed ko.
   number to change and never retries the same port.
 - Response: quit (and remove) the main app first, then start ranode; verify by connecting from
   another tailnet Mac.
+- The other way round holds too from ko.23: while ranode holds 21118 the main app's bind fails,
+  and after ranode quits the main app receives only once it is restarted (before, its idle shared
+  listener took over at once). This matches the cutover, which removes the main app.
 
 ## Release on macOS: the nested `service` binary
 

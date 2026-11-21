@@ -214,8 +214,9 @@ fn is_tailscale_interface_address(addrs: &[(String, IpAddr)], ip: IpAddr) -> boo
 }
 
 /// This computer's addresses with their interface names, straight from getifaddrs(3): cheap,
-/// unlike a full interface listing that also looks up gateways.
-#[cfg(unix)]
+/// unlike a full interface listing that also looks up gateways. Not on Android, whose libc has it
+/// only from API 24 (the app targets older ones); ranode is a macOS app.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn interface_addresses() -> Vec<(String, IpAddr)> {
     use hbb_common::libc;
     let mut out = Vec::new();
@@ -250,7 +251,7 @@ fn interface_addresses() -> Vec<(String, IpAddr)> {
     out
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn interface_addresses() -> Vec<(String, IpAddr)> {
     Vec::new()
 }
@@ -338,12 +339,27 @@ pub async fn listen_direct(
     hbb_common::tcp::listen_any(port).await
 }
 
-// macOS opens IPv6 sockets dual-stack (net.inet6.ip6.v6only is 0), so [::] takes IPv4 too.
+// One dual-stack [::] socket takes IPv4 too, with SO_REUSEADDR but never SO_REUSEPORT.
 #[cfg(target_os = "macos")]
 fn listen_exclusive(port: u16) -> std::io::Result<hbb_common::tokio::net::TcpListener> {
-    use hbb_common::tokio::net::TcpSocket;
+    use hbb_common::{libc, tokio::net::TcpSocket};
+    use std::os::unix::io::AsRawFd;
     let (socket, addr) = match TcpSocket::new_v6() {
-        Ok(socket) => (socket, SocketAddr::from(([0u16; 8], port))),
+        Ok(socket) => {
+            // Dual-stack whatever net.inet6.ip6.v6only says, like upstream's listen_any.
+            let off: libc::c_int = 0;
+            // SAFETY: a valid socket fd and a c_int option value of the size passed.
+            unsafe {
+                libc::setsockopt(
+                    socket.as_raw_fd(),
+                    libc::IPPROTO_IPV6,
+                    libc::IPV6_V6ONLY,
+                    &off as *const libc::c_int as *const libc::c_void,
+                    std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+                );
+            }
+            (socket, SocketAddr::from(([0u16; 8], port)))
+        }
         Err(_) => (TcpSocket::new_v4()?, SocketAddr::from(([0, 0, 0, 0], port))),
     };
     socket.set_reuseaddr(true)?;
@@ -547,7 +563,7 @@ mod tests {
         assert!(!is_tailscale_interface_address(&addrs, ip("100.70.0.3")));
         assert!(!is_tailscale_interface_address(&addrs, ip("100.96.0.7")));
         // getifaddrs decoding, byte order included: every host has 127.0.0.1.
-        #[cfg(unix)]
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
         assert!(interface_addresses()
             .iter()
             .any(|(_, a)| *a == ip("127.0.0.1")));
