@@ -90,3 +90,39 @@ This file is written in English only.
   ko.23 release.
 - Approach: when the memo code is next touched, drop a device's memo when its check ends
   `unreachable`; until then the memo is overwritten as soon as the device answers or refuses.
+
+## Stale "owner's own server" claims about the main app
+
+- Condition: `docs/architecture.md` (Rendezvous row, main-app cell) and `docs/security-policy.md`
+  ("Who may connect in", main-app row) say the main app uses the owner's own RustDesk server; the
+  machine setup points it at the default public server. The comment in
+  `flutter/lib/desktop/pages/desktop_home_page.dart` that says ranode makes only outgoing
+  connections is stale since ko.23.
+- Blast radius: an agent planning the main-app removal or ID access reads the wrong server.
+- Why not now: outside ko.24's change scope (found in its final review).
+- Approach: reword the two rows and the comment in the next ranode cycle.
+
+## The office subnet trusts any LAN with the same numbering
+
+- Condition: from ko.24 a Craft Mac's ranode accepts peers from its listed office subnet when the
+  connection arrives on the Mac's own address in that subnet on a non-tunnel interface, with the
+  route back through it (the decision 0009 rule applied to the subnet). A private range does not
+  prove which LAN it is: on another network with the same numbering, devices that know the Mac's
+  permanent password could connect. Virtual interfaces other than `utun*`, `tailscale*`, `ipsec*`
+  and `ppp*` (`bridge*` of VMs, `gif*`, `stf*`) count as LAN for this rule.
+- Blast radius: only a Craft Mac moved out of the office onto such a network, or an office subnet
+  that overlaps a VM bridge; the owner's own Macs list no office subnet. The permanent password is
+  still required (approve mode `password`).
+- Why not now: binding the subnet to one network (gateway MAC, Wi-Fi SSID) needs new state; the
+  Craft Macs are fixed office Macs.
+- Approach: revisit if a Craft Mac ever leaves the office; the machine setup can clear the subnet
+  with `--set-incoming-policy --extra-subnets none`.
+
+## A refused relay makes the controller wait for its timeout
+
+- Condition: from ko.24 ranode refuses relayed incoming in `create_relay_connection_`, after
+  upstream has already answered the rendezvous server; the controller waits for its relay timeout
+  instead of seeing "Your ip is blocked by the peer", and each refusal logs one error line.
+- Blast radius: cosmetic (no access is granted); repeated attempts add log lines.
+- Why not now: failing faster means changing upstream's relay handshake in `rendezvous_mediator.rs`.
+- Approach: leave as is unless the log volume becomes a problem.

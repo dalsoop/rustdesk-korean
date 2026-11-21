@@ -72,20 +72,35 @@ Option `enable-input-source-toggle`, default **on** (turned off only with
   owner's Macs, after which ranode alone receives. Only one app can listen on 21118 at a time; a
   ranode started while the main app holds 21118 connects out normally and starts receiving only
   after it is started again with the port free.
-- ranode settings that the user cannot change: `direct-server=Y`, whitelist
-  `100.64.0.0/10,fd7a:115c:a1e0::/48`, `verification-method=use-permanent-password` (the
-  one-time password is never accepted; a click to accept on the Mac still works). A peer in those
-  ranges must also arrive on this Mac's Tailscale interface, with the route back through it
-  (decision 0009).
-- ranode's left pane "이 Mac에 접속받기" shows this Mac's Tailscale IPv4 (from the latest Tailscale
-  read, refreshed at least every 30 s on every tab; "Tailscale이 켜져 있어야 접속받을 수 있습니다"
-  when Tailscale is off, signed out, waiting or absent, "Tailscale 상태를 확인하는 중입니다 · …"
-  before the first read and while it is connecting, not answering or unreadable), whether a
-  permanent password is set with upstream's "영구 비밀번호 설정" (`Set permanent password`) button
-  (without one, only a click to accept lets a device in, and the card says so), "지금은 접속받지
-  않음 (서비스 중지됨)" when `stop-service` is `Y`, and "지금은 접속받지 않음: 다른 앱(…)이 21118
-  포트를 쓰고 있습니다 …" when the direct listener's bind failed (`main_public_direct_port_busy`).
-  It never shows a RustDesk ID or one-time password.
+- ranode settings that the user cannot change (the floor): `direct-server=Y`,
+  `verification-method=use-permanent-password` (the one-time password is never accepted),
+  `allow-remote-config-modification=N`, and a whitelist that starts with
+  `100.64.0.0/10,fd7a:115c:a1e0::/48`. A peer in those ranges must also arrive on this Mac's
+  Tailscale interface, with the route back through it (decision 0009).
+- Per-Mac incoming policy (from ko.24), set only with `--set-incoming-policy` while ranode is quit
+  and read once at ranode's start: extra private IPv4 subnets appended to the whitelist (the office
+  subnet on the company Craft Macs; none on the owner's own Macs), and approve mode `password`
+  (no click to accept; Craft Macs) or `both` / unset (upstream default: click to accept works and
+  stays changeable in ranode's settings). Unset = ko.23 behaviour. An invalid stored entry is
+  skipped; the floor always holds. A peer in a listed subnet must arrive on this Mac's own address
+  in that same subnet, held by a non-tunnel interface, with the route back through it (the
+  decision 0009 rule applied to the office subnet).
+- ID connections (from ko.24): ranode is reached by its RustDesk ID through the public server
+  (decision 0007); the whitelist checks the peer's own address, so an ID connection succeeds only
+  where the path is direct from an allowed network (inside the office on a Craft Mac; in practice
+  upstream's LAN "intranet" TCP path). ranode refuses every relayed incoming connection before
+  opening it, because a relayed peer's address is only the server's claim (decision 0009
+  addendum). Outside the office only the Tailscale IP works.
+- ranode's left pane "이 Mac에 접속받기" shows this Mac's RustDesk ID with a copy button (from ko.24;
+  only once the ID is known, never "Generating ..."), its Tailscale IPv4 (from the latest Tailscale
+  read, refreshed at least every 30 s on every tab; from ko.24 "Tailscale이 꺼져 있어 Tailscale
+  주소로는 접속받을 수 없습니다" when Tailscale is off, signed out, waiting or absent, "Tailscale 상태를
+  확인하는 중입니다 · …" before the first read and while it is connecting, not answering or
+  unreadable), whether a permanent password is set with upstream's "영구 비밀번호 설정" (`Set
+  permanent password`) button (without one, only a click to accept lets a device in, and the card
+  says so), "지금은 접속받지 않음 (서비스 중지됨)" when `stop-service` is `Y`, and "지금은 접속받지
+  않음: 다른 앱(…)이 21118 포트를 쓰고 있습니다 …" when the direct listener's bind failed
+  (`main_public_direct_port_busy`). It never shows the one-time password.
 - When ranode on a Mac is closed, other Macs' on-prem tabs show that Mac as "RustDesk 없음".
 - ranode's first launch clears, once, the own-server settings (custom rendezvous, relay, API
   server, key) and every peer, favourite and remembered remote id containing `@rustdesk.internal.kr`.

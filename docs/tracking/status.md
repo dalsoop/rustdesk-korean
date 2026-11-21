@@ -16,7 +16,13 @@ This file is written in English only.
 
 ## Merged, not released
 
-- Nothing besides open PRs: ko.23 (below) took everything merged up to 80d94a8b.
+- ko.24 (version `1.5.0+6824`, PR #37, merged 2026-11-21): ranode accepts ID connections like the
+  main app (per-Mac whitelist and approve mode via `--set-incoming-policy`, floor adds
+  `allow-remote-config-modification=N`); the left pane shows the ID. Office-subnet peers get the
+  decision 0009 rule too (own address in that subnet, non-tunnel interface, route back through
+  it), and ranode refuses every relayed incoming connection (decision 0009 addendum). Fork Rust
+  tests (42) and `platform::macos` (13) passed on m5m1; CI green. Not released: it awaits its own
+  release with the live checks (Remaining, item 4) and the machine cutover.
 
 ## ko.23 release (2026-11-21)
 
@@ -72,6 +78,20 @@ still owns 21118. m5m2 keeps ranode ko.22.
    (stdin, as the user, ranode running); verify from another tailnet Mac.
 3. Removal of the main app from the owner's Macs and the switch of their setup (permissions,
    options, password) to ranode — done in the machine-setup repo.
+4. **ko.24 release** (public release on `m5m1`, or an internal build per operations "Internal
+   builds"), from the merge commit of PR #37: `cargo test --lib -- hangul_key fork_update
+   public_flavor updater` and `platform::macos` on a Mac, then on the signed ranode, after the
+   cutover (operations, "Cutover keeping the Mac's ID"):
+   1. Craft Mac: by the kept ID from inside the office, password only, no click offered (works on
+      upstream's LAN "intranet" TCP path; a WebRTC, KCP or relayed attempt is refused); by
+      Tailscale IP;
+   2. Craft Mac: by ID from outside the office → refused (relayed: refused before the relay
+      opens); an office-range peer sent to the Craft Mac's Tailscale IP → refused (decision 0009
+      addendum);
+   3. own Mac: Tailscale IP works and click-accept is offered;
+   4. the card shows the ID; `--set-incoming-policy` prints the expected line, exits 2 with ranode
+      running and 1 for a public subnet;
+   5. after a rebuild signed with the stable identity, the macOS grants are still on.
 
 ## Blockers
 

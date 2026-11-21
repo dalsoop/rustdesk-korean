@@ -108,6 +108,20 @@ build queue (`build-pipeline submit … --host m5m1`), never on the M1 MacBooks.
 6. Roll out: the owner's Macs pin version + sha256 per app in their machine-setup repo; the office
    Linux server pins `versions.rustdesk` (`1.5.0+koN`), sha256 and URL in its infrastructure repo.
 
+## Internal builds (from ko.24)
+
+- ko.24 and later may ship as internal builds (ko.23 was released as a notarized Developer ID
+  release on 2026-11-21): made on the company build Mac by the machine-setup
+  repo's `ranode-build` script from a merge commit on `feat/sync-upstream-1.5.0`, installed only on
+  the owner's and the company's Macs. A notarized Developer ID release is optional and later.
+- Signing rule: every internal build is signed with the one stable self-signed code-signing
+  identity "ranode internal signing" (created once, kept in the vault, imported into the build
+  Mac's keychain by the machine-setup build role). Never ad-hoc: macOS ties Screen Recording,
+  Accessibility and Input Monitoring grants to the signing identity, and an ad-hoc signature
+  changes with every build. Check with `codesign -dv` before installing.
+- Before the first internal build of a commit, run the Rust tests of the changed fork modules on
+  the build Mac (CI runs them on Linux only; `platform::macos` and the macOS listener need a Mac).
+
 ## ranode as the receiving app (from ko.23)
 
 Order on a Mac that still has the main app (ranode retakes a busy 21118 only when it starts). If
@@ -125,6 +139,20 @@ printf '%s\n' "$PASSWORD" | "/Applications/RustDesk (forked ranode).app/Contents
 The last command runs as the logged-in user (never `sudo`), needs ranode running, prints `Done!`
 and exits 0; exit 2 means ranode was not running or did not apply it. Take `$PASSWORD` from the
 vault without echoing it. ranode then needs Screen Recording, Accessibility and Input Monitoring.
+
+### Cutover keeping the Mac's ID (from ko.24; run by the machine-setup repo)
+
+1. Quit the main app and ranode. Remove the main app, or at least disable everything that starts
+   it (its login LaunchAgent, and its service plists where installed): a main app running with the
+   same ID as ranode would clash.
+2. Back up ranode's `~/Library/Preferences/com.carriez.RustDeskPublic/RustDeskPublic.toml`, then
+   copy the main app's `~/Library/Preferences/com.carriez.RustDesk/RustDesk.toml` over it. This
+   keeps the Mac's ID, key pair and permanent password; never read or print the file's values.
+   ranode's local settings (`RustDeskPublic_local.toml`) are not touched.
+3. `RustDeskPublic --set-incoming-policy`, ranode quit, as the user: Craft Macs
+   `--extra-subnets <office subnet> --approve-mode password`; the owner's own Macs: skip.
+4. Start ranode, then `--set-permanent-password` from the vault (above).
+5. Verify once by ID from inside the office (Craft Macs) and by Tailscale IP.
 
 ## Install by hand on a Mac
 

@@ -3,8 +3,9 @@
 //!
 //! A separate app for reaching peers through the public RustDesk server. It runs under its own
 //! app name, so its config, socket and log folders never mix with the main app's. It accepts
-//! incoming connections only from the Tailscale range and only with its permanent password
-//! (set with `--set-permanent-password`). A build without the flavor never enters any of this.
+//! incoming connections only from the Tailscale range plus the private subnets set per Mac with
+//! `--set-incoming-policy`, and only with its permanent password (set with
+//! `--set-permanent-password`). A build without the flavor never enters any of this.
 
 use base::config::keys;
 use hbb_common::{
@@ -15,7 +16,7 @@ use hbb_common::{
 };
 use std::{
     collections::HashMap,
-    net::{IpAddr, SocketAddr, UdpSocket},
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
     time::{Duration, Instant},
 };
 
@@ -25,6 +26,15 @@ const TAILSCALE_RANGE: &str = "100.64.0.0/10,fd7a:115c:a1e0::/48";
 const INTERNAL_ID_DOMAIN: &str = "@rustdesk.internal.kr";
 const CLEANUP_DONE_OPTION: &str = "public-flavor-cleanup-done";
 pub const DISCOVERY_PROBE_TIMEOUT: Duration = Duration::from_millis(1500);
+const EXTRA_SUBNETS_OPTION: &str = "public-incoming-extra-subnets";
+const APPROVE_MODE_OPTION: &str = "public-incoming-approve-mode";
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+const MAX_EXTRA_SUBNETS: usize = 8;
+const PRIVATE_RANGES: [(Ipv4Addr, u8); 3] = [
+    (Ipv4Addr::new(10, 0, 0, 0), 8),
+    (Ipv4Addr::new(172, 16, 0, 0), 12),
+    (Ipv4Addr::new(192, 168, 0, 0), 16),
+];
 
 #[inline]
 pub fn is_public() -> bool {
@@ -49,14 +59,131 @@ pub fn init() {
 }
 
 fn override_settings() -> HashMap<String, String> {
-    HashMap::from([
+    build_overrides(
+        &LocalConfig::get_option(EXTRA_SUBNETS_OPTION),
+        &LocalConfig::get_option(APPROVE_MODE_OPTION),
+    )
+}
+
+/// The fixed floor plus the per-Mac policy stored by `--set-incoming-policy`. A stored entry that
+/// is not valid is skipped, so a hand-edited value can never weaken the floor.
+fn build_overrides(extra_subnets: &str, approve_mode: &str) -> HashMap<String, String> {
+    // Upstream splits the whitelist on ',' without trimming, so entries are joined without spaces.
+    let whitelist = std::iter::once(TAILSCALE_RANGE.to_owned())
+        .chain(extra_subnets.split(',').filter_map(parse_private_subnet))
+        .collect::<Vec<_>>()
+        .join(",");
+    let mut overrides = HashMap::from([
         (keys::OPTION_DIRECT_SERVER.to_owned(), "Y".to_owned()),
-        (keys::OPTION_WHITELIST.to_owned(), TAILSCALE_RANGE.to_owned()),
+        (keys::OPTION_WHITELIST.to_owned(), whitelist),
         (
             keys::OPTION_VERIFICATION_METHOD.to_owned(),
             "use-permanent-password".to_owned(),
         ),
-    ])
+        (
+            keys::OPTION_ALLOW_REMOTE_CONFIG_MODIFICATION.to_owned(),
+            "N".to_owned(),
+        ),
+    ]);
+    if approve_mode == "password" {
+        overrides.insert(keys::OPTION_APPROVE_MODE.to_owned(), "password".to_owned());
+    }
+    overrides
+}
+
+fn ipv4_mask(prefix: u8) -> u32 {
+    if prefix == 0 {
+        0
+    } else {
+        u32::MAX << (32 - u32::from(prefix))
+    }
+}
+
+/// `a.b.c.d/n` without host bits and wholly inside 10/8, 172.16/12 or 192.168/16, normalized.
+fn parse_private_subnet(entry: &str) -> Option<String> {
+    let (addr, prefix) = entry.trim().split_once('/')?;
+    let addr: Ipv4Addr = addr.parse().ok()?;
+    let prefix: u8 = prefix.parse().ok().filter(|n| *n <= 32)?;
+    let bits = u32::from(addr);
+    if bits & ipv4_mask(prefix) != bits {
+        return None;
+    }
+    PRIVATE_RANGES
+        .iter()
+        .any(|(base, len)| prefix >= *len && bits & ipv4_mask(*len) == u32::from(*base))
+        .then(|| format!("{addr}/{prefix}"))
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[derive(Debug, Default, PartialEq)]
+struct IncomingPolicyArgs {
+    /// `Some(empty)` clears the extras (`none`).
+    extra_subnets: Option<Vec<String>>,
+    approve_mode: Option<&'static str>,
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn parse_extra_subnets(list: &str) -> Result<Vec<String>, String> {
+    if list.trim() == "none" {
+        return Ok(Vec::new());
+    }
+    let entries: Vec<&str> = list.split(',').map(str::trim).collect();
+    if entries.len() > MAX_EXTRA_SUBNETS {
+        return Err(format!("at most {MAX_EXTRA_SUBNETS} subnets."));
+    }
+    entries
+        .into_iter()
+        .map(|e| {
+            parse_private_subnet(e).ok_or_else(|| {
+                format!("'{e}' is not a private IPv4 network (10/8, 172.16/12, 192.168/16).")
+            })
+        })
+        .collect()
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn parse_incoming_policy_args(rest: &[String]) -> Result<IncomingPolicyArgs, String> {
+    let mut args = IncomingPolicyArgs::default();
+    let mut it = rest.iter();
+    while let Some(flag) = it.next() {
+        let value = match flag.as_str() {
+            "--extra-subnets" | "--approve-mode" => it
+                .next()
+                .ok_or_else(|| format!("{flag} needs a value."))?,
+            _ => return Err(format!("unknown argument '{flag}'.")),
+        };
+        if flag == "--extra-subnets" {
+            if args.extra_subnets.is_some() {
+                return Err(format!("{flag} given twice."));
+            }
+            args.extra_subnets = Some(parse_extra_subnets(value)?);
+        } else {
+            if args.approve_mode.is_some() {
+                return Err(format!("{flag} given twice."));
+            }
+            args.approve_mode = Some(match value.as_str() {
+                "password" => "password",
+                "both" => "both",
+                _ => return Err(format!("{flag} takes password or both.")),
+            });
+        }
+    }
+    if args == IncomingPolicyArgs::default() {
+        return Err("give --extra-subnets and/or --approve-mode.".to_owned());
+    }
+    Ok(args)
+}
+
+fn incoming_policy_line(overrides: &HashMap<String, String>) -> String {
+    let whitelist = overrides
+        .get(keys::OPTION_WHITELIST)
+        .map(String::as_str)
+        .unwrap_or(TAILSCALE_RANGE);
+    let approve_mode = match overrides.get(keys::OPTION_APPROVE_MODE).map(String::as_str) {
+        Some("password") => "password",
+        _ => "both",
+    };
+    format!("whitelist={whitelist} approve-mode={approve_mode}")
 }
 
 fn is_internal_peer_id(id: &str) -> bool {
@@ -291,17 +418,80 @@ fn tailscale_path_allowed(
             && route_source(peer) == Some(local))
 }
 
+/// Whether `ip` lies in `entry`, an entry that `parse_private_subnet` accepts.
+fn in_private_subnet(entry: &str, ip: IpAddr) -> bool {
+    let (IpAddr::V4(v4), Some(net)) = (ip, parse_private_subnet(entry)) else {
+        return false;
+    };
+    match net.split_once('/').map(|(a, p)| (a.parse::<Ipv4Addr>(), p.parse::<u8>())) {
+        Some((Ok(addr), Ok(prefix))) => u32::from(v4) & ipv4_mask(prefix) == u32::from(addr),
+        _ => false,
+    }
+}
+
+/// Whether `ip` is held by an interface in `addrs` that is not a tunnel (`utun*`, `tailscale*`,
+/// and macOS's IKEv2/L2TP `ipsec*` and `ppp*`).
+fn is_lan_interface_address(addrs: &[(String, IpAddr)], ip: IpAddr) -> bool {
+    addrs.iter().any(|(name, a)| {
+        *a == ip
+            && !is_tailscale_interface_name(name)
+            && !name.starts_with("ipsec")
+            && !name.starts_with("ppp")
+    })
+}
+
+/// The office-subnet counterpart of `tailscale_path_allowed` (ko.24): a peer address in one of the
+/// private subnets the whitelist lists for this Mac is trusted only when the connection reached an
+/// address of this computer inside that same subnet, held by a non-tunnel interface (the office
+/// LAN itself, not a VPN or a Tailscale subnet route), and the way back to the peer runs through
+/// that address. Other peers are left to the whitelist and the Tailscale rule.
+fn office_path_allowed(
+    peer: IpAddr,
+    local: IpAddr,
+    subnets: &[String],
+    on_lan_interface: impl Fn(IpAddr) -> bool,
+    route_source: impl Fn(IpAddr) -> Option<IpAddr>,
+) -> bool {
+    let listed: Vec<&String> = subnets
+        .iter()
+        .filter(|s| in_private_subnet(s, peer))
+        .collect();
+    listed.is_empty()
+        || (listed.iter().any(|s| in_private_subnet(s, local))
+            && on_lan_interface(local)
+            && route_source(peer) == Some(local))
+}
+
+/// Korean fork hook for upstream's relay path (`server::create_relay_connection_`). A relayed
+/// peer's address is only what the rendezvous message claims; this computer never sees it, and the
+/// local address is its own socket to the relay, so neither the whitelist nor the path rules above
+/// can check it. ranode admits direct paths only and refuses every relay. `true` outside ranode.
+pub fn relayed_incoming_allowed() -> bool {
+    !is_public()
+}
+
 /// Korean fork hook for `Connection::on_open`, next to the whitelist check. `true` outside ranode.
 pub fn incoming_path_allowed(peer: SocketAddr, local: SocketAddr) -> bool {
     if !is_public() {
         return true;
     }
-    tailscale_path_allowed(
+    let (peer, local) = (
         hbb_common::try_into_v4(peer).ip(),
         hbb_common::try_into_v4(local).ip(),
-        is_on_tailscale_interface,
-        route_source,
-    )
+    );
+    // The enforced whitelist (pinned in `init`); its private entries are the office subnets.
+    let subnets: Vec<String> = Config::get_option(keys::OPTION_WHITELIST)
+        .split(',')
+        .filter_map(parse_private_subnet)
+        .collect();
+    tailscale_path_allowed(peer, local, is_on_tailscale_interface, route_source)
+        && office_path_allowed(
+            peer,
+            local,
+            &subnets,
+            |ip| is_lan_interface_address(&interface_addresses(), ip),
+            route_source,
+        )
 }
 
 // The direct listener's last bind attempt: 0 none yet, 1 listening, 2 failed (port in use).
@@ -421,12 +611,57 @@ fn run_set_permanent_password(rest: &[String]) -> i32 {
     }
 }
 
+/// Only the running ranode's GUI process answers its main IPC: ranode installs no service.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[hbb_common::tokio::main(flavor = "current_thread", crate = "hbb_common::tokio")]
+async fn is_ranode_running() -> bool {
+    crate::ipc::connect(300, "").await.is_ok()
+}
+
+/// Exit code: 0 saved, 1 refused input or root, 2 ranode is running.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn run_set_incoming_policy(rest: &[String]) -> i32 {
+    if crate::platform::is_root() {
+        eprintln!("Refused: run as the logged-in user, not as root.");
+        return 1;
+    }
+    let args = match parse_incoming_policy_args(rest) {
+        Ok(args) => args,
+        Err(reason) => {
+            eprintln!("Refused: {reason}");
+            return 1;
+        }
+    };
+    // A running ranode keeps its own copy of the local settings and would write it back.
+    if is_ranode_running() {
+        eprintln!("Refused: quit {APP_NAME} first, then run this again.");
+        return 2;
+    }
+    if let Some(subnets) = args.extra_subnets {
+        LocalConfig::set_option(EXTRA_SUBNETS_OPTION.to_owned(), subnets.join(","));
+    }
+    if let Some(mode) = args.approve_mode {
+        LocalConfig::set_option(APPROVE_MODE_OPTION.to_owned(), mode.to_owned());
+    }
+    println!(
+        "{}",
+        incoming_policy_line(&build_overrides(
+            &LocalConfig::get_option(EXTRA_SUBNETS_OPTION),
+            &LocalConfig::get_option(APPROVE_MODE_OPTION),
+        ))
+    );
+    0
+}
+
 /// ranode-only CLI commands; `None` leaves `args` to upstream's handling.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn handle_cli(args: &[String]) -> Option<i32> {
     match args.split_first() {
         Some((cmd, rest)) if is_public() && cmd == "--set-permanent-password" => {
             Some(run_set_permanent_password(rest))
+        }
+        Some((cmd, rest)) if is_public() && cmd == "--set-incoming-policy" => {
+            Some(run_set_incoming_policy(rest))
         }
         _ => None,
     }
@@ -448,7 +683,7 @@ mod tests {
 
     #[test]
     fn incoming_is_pinned_to_tailscale_with_permanent_password() {
-        let settings = override_settings();
+        let settings = build_overrides("", "");
         assert_eq!(
             settings.get(keys::OPTION_DIRECT_SERVER).map(String::as_str),
             Some("Y")
@@ -463,6 +698,101 @@ mod tests {
                 .map(String::as_str),
             Some("use-permanent-password")
         );
+        assert_eq!(
+            settings
+                .get(keys::OPTION_ALLOW_REMOTE_CONFIG_MODIFICATION)
+                .map(String::as_str),
+            Some("N")
+        );
+        assert_eq!(settings.get(keys::OPTION_APPROVE_MODE), None);
+        assert_eq!(
+            incoming_policy_line(&settings),
+            "whitelist=100.64.0.0/10,fd7a:115c:a1e0::/48 approve-mode=both"
+        );
+    }
+
+    #[test]
+    fn only_private_ipv4_networks_are_accepted_as_extra_subnets() {
+        for ok in ["10.0.0.0/24", "172.16.5.0/24", "192.168.1.0/24", " 10.0.0.0/8 "] {
+            assert!(parse_private_subnet(ok).is_some(), "{ok}");
+        }
+        for bad in [
+            "8.8.8.0/24",
+            "0.0.0.0/0",
+            "100.64.0.0/10",
+            "10.0.0.1/24",
+            "fd00::/8",
+            "",
+            "10.0.0.0",
+            "10.0.0.0/33",
+            "172.0.0.0/8",
+            "192.168.0.0/15",
+        ] {
+            assert_eq!(parse_private_subnet(bad), None, "{bad}");
+        }
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[test]
+    fn incoming_policy_flags_are_parsed_strictly() {
+        let parse = |argv: &[&str]| {
+            parse_incoming_policy_args(&argv.iter().map(|a| a.to_string()).collect::<Vec<_>>())
+        };
+        assert_eq!(
+            parse(&[
+                "--extra-subnets",
+                "10.0.0.0/24, 192.168.1.0/24",
+                "--approve-mode",
+                "password",
+            ]),
+            Ok(IncomingPolicyArgs {
+                extra_subnets: Some(vec!["10.0.0.0/24".to_owned(), "192.168.1.0/24".to_owned()]),
+                approve_mode: Some("password"),
+            })
+        );
+        assert_eq!(
+            parse(&["--extra-subnets", "none"]),
+            Ok(IncomingPolicyArgs {
+                extra_subnets: Some(Vec::new()),
+                approve_mode: None,
+            })
+        );
+        assert!(parse(&[]).is_err());
+        assert!(parse(&["--whitelist", "10.0.0.0/24"]).is_err());
+        assert!(parse(&["--approve-mode", "both", "--approve-mode", "both"]).is_err());
+        assert!(parse(&["--approve-mode", "click"]).is_err());
+        assert!(parse(&["--extra-subnets"]).is_err());
+        assert!(parse(&["--extra-subnets", ""]).is_err());
+        assert!(parse(&["--extra-subnets", "10.0.0.0/24,8.8.8.0/24"]).is_err());
+        let nine = vec!["10.0.0.0/24"; 9].join(",");
+        assert!(parse(&["--extra-subnets", &nine]).is_err());
+    }
+
+    #[test]
+    fn stored_policy_extends_the_floor_and_invalid_entries_are_ignored() {
+        let office = build_overrides("10.0.0.0/24", "password");
+        assert_eq!(
+            office.get(keys::OPTION_WHITELIST).map(String::as_str),
+            Some("100.64.0.0/10,fd7a:115c:a1e0::/48,10.0.0.0/24")
+        );
+        assert_eq!(
+            office.get(keys::OPTION_APPROVE_MODE).map(String::as_str),
+            Some("password")
+        );
+        assert_eq!(
+            office.get(keys::OPTION_DIRECT_SERVER).map(String::as_str),
+            Some("Y")
+        );
+        assert_eq!(
+            incoming_policy_line(&office),
+            "whitelist=100.64.0.0/10,fd7a:115c:a1e0::/48,10.0.0.0/24 approve-mode=password"
+        );
+        let edited = build_overrides("0.0.0.0/0, 192.168.1.0/24 ,8.8.8.0/24", "both");
+        assert_eq!(
+            edited.get(keys::OPTION_WHITELIST).map(String::as_str),
+            Some("100.64.0.0/10,fd7a:115c:a1e0::/48,192.168.1.0/24")
+        );
+        assert_eq!(edited.get(keys::OPTION_APPROVE_MODE), None);
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -562,6 +892,48 @@ mod tests {
         assert!(is_tailscale_interface_address(&addrs, ip("100.64.0.20")));
         assert!(!is_tailscale_interface_address(&addrs, ip("100.70.0.3")));
         assert!(!is_tailscale_interface_address(&addrs, ip("100.96.0.7")));
+        // ko.24 office subnet 192.168.0.0/24, held by en1 (192.168.0.5); a VPN tunnel has 10.8.0.2.
+        let office = ["192.168.0.0/24".to_owned()];
+        let lan = |a: IpAddr| a == ip("192.168.0.5");
+        let office_route = |peer: IpAddr| {
+            Some(match peer {
+                IpAddr::V4(v4) if v4.octets()[..3] == [192, 168, 0] => ip("192.168.0.5"),
+                _ => ip("10.8.0.2"),
+            })
+        };
+        let office_allowed = |peer: &str, local: &str| {
+            office_path_allowed(ip(peer), ip(local), &office, lan, office_route)
+        };
+        assert!(office_allowed("192.168.0.9", "192.168.0.5"));
+        // An office-range source reaching another address of this Mac is refused.
+        assert!(!office_allowed("192.168.0.9", "100.101.2.3"));
+        assert!(!office_allowed("192.168.0.9", "10.8.0.2"));
+        assert!(!office_path_allowed(
+            ip("192.168.0.9"),
+            ip("192.168.0.5"),
+            &office,
+            lan,
+            |_| Some(ip("10.8.0.2"))
+        ));
+        assert!(!office_path_allowed(
+            ip("192.168.0.9"),
+            ip("192.168.0.5"),
+            &office,
+            |_| false,
+            office_route
+        ));
+        // Peers outside the listed subnets are left to the whitelist and the Tailscale rule.
+        assert!(office_allowed("100.64.0.9", "100.101.2.3"));
+        assert!(office_path_allowed(ip("192.168.0.9"), ip("10.8.0.2"), &[], lan, office_route));
+        let ifs = [
+            ("en1", "192.168.0.5"),
+            ("utun7", "10.8.0.2"),
+            ("ipsec0", "10.9.0.2"),
+        ]
+        .map(|(name, a)| (name.to_owned(), ip(a)));
+        assert!(is_lan_interface_address(&ifs, ip("192.168.0.5")));
+        assert!(!is_lan_interface_address(&ifs, ip("10.8.0.2")));
+        assert!(!is_lan_interface_address(&ifs, ip("10.9.0.2")));
         // getifaddrs decoding, byte order included: every host has 127.0.0.1.
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         assert!(interface_addresses()

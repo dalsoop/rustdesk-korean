@@ -16,7 +16,7 @@ the components below on top of it.
 | Android Korean soft keyboard | `flutter/lib/models/soft_keyboard_input_utils.dart`, `hangul_dubeolsik.dart`, `korean_toggle_key.dart`, `flutter/lib/mobile/pages/remote_page.dart` | Phone: diffs keyboard edits by grapheme, sends 두벌식 keys + F19/F24 to Linux, 한/영 button | upstream input model |
 | Fork update check | `src/fork_update.rs`, edits in `src/updater.rs`, `build.rs` | Compares this build's ko number with the fork's GitHub "Latest" release | GitHub releases API |
 | Build flavor | `build.rs` (`RUSTDESK_BUILD_FLAVOR`), `build.py` (`RUSTDESK_FLAVOR`, `Flavor.xcconfig`), `flutter/macos/Runner/Configs/AppInfo.xcconfig` | Chooses main app or ranode at build time | — |
-| ranode core | `src/public_flavor.rs`, gates in `src/common.rs`, `src/platform/macos.rs`, `src/core_main.rs` | App name `RustDeskPublic`, pinned options, no service install, one-time cleanup, LAN discovery probe | `hbb_common::config` |
+| ranode core | `src/public_flavor.rs`, gates in `src/common.rs`, `src/platform/macos.rs`, `src/core_main.rs` | App name `RustDeskPublic`, pinned options plus the per-Mac incoming policy, `--set-permanent-password` / `--set-incoming-policy`, no service install, one-time cleanup, LAN discovery probe | `hbb_common::config` |
 | ranode home | `flutter/lib/desktop/pages/public_home.dart`, `public_onboarding.dart`, `flutter/lib/common/public_onprem.dart`, `public_login.dart`, `tailscale_range.dart` | On-prem tab (Tailscale devices) and internet tab (public server), first-run guide | Tailscale module, ranode core via FFI |
 | Tailscale module | `flutter/lib/common/tailscale.dart` | Runs the local `tailscale` CLI (status, profiles, switch), probes TCP 21118 on peers | the Tailscale app / CLI on the same Mac |
 | Release tooling | `res/osx-sign-notarize.sh`, `res/android-sign-release.sh`, `.github/workflows/build-desktop-ko.yml`, `flutter-unit-test.yml` | Sign/notarize macOS, sign Android, build Windows/Linux in CI | owner's signing keys, GitHub Actions |
@@ -36,8 +36,8 @@ One source tree, two builds. `RUSTDESK_FLAVOR=public` is read by `build.py` (wri
 | Bundle file | `/Applications/RustDesk.app` | `/Applications/RustDesk (forked ranode).app` |
 | Bundle id / app name / scheme | `com.carriez.rustdesk` / `RustDesk` / `rustdesk` | `net.ranode.rustdesk-public` / `RustDeskPublic` / `rustdeskpublic` |
 | Config, IPC socket, logs | under `RustDesk` | under `RustDeskPublic` (never shared) |
-| Rendezvous server | the owner's own RustDesk server, reachable only inside Tailscale | public RustDesk server (internet tab) |
-| Incoming | yes; direct port 21118 + whitelist 100.64.0.0/10 set on each Mac with `sudo RustDesk --option` | from ko.23 yes, in its own GUI process: pinned `direct-server=Y`, whitelist 100.64.0.0/10 and fd7a:115c:a1e0::/48, arriving on the Tailscale interface only (decision 0009), permanent password only; until ko.22 no |
+| Rendezvous server | the owner's own RustDesk server, reachable only inside Tailscale | public RustDesk server (internet tab; registers its ID there, shown in the left pane from ko.24) |
+| Incoming | yes; direct port 21118 + whitelist 100.64.0.0/10 set on each Mac with `sudo RustDesk --option` | from ko.23 yes, in its own GUI process: pinned `direct-server=Y`, whitelist 100.64.0.0/10 and fd7a:115c:a1e0::/48, arriving on the Tailscale interface only (decision 0009), permanent password only; from ko.24 also by ID via the public server, whitelist + the Mac's extra private subnets (arriving on this Mac's own address in that subnet on a non-tunnel interface) and approve mode from `--set-incoming-policy` (read at start); until ko.22 no |
 | Service (LaunchDaemon/Agent) | upstream's service can be installed per Mac; the owner does not need login-screen access | refused in code |
 
 Both use TCP 21118 (direct access) and UDP 21119 (LAN discovery) when they listen, so only one of
@@ -64,11 +64,14 @@ them can listen at a time.
 ## Boundaries
 
 - What crosses into the owner's devices: only connections from 100.64.0.0/10 (ranode also
-  fd7a:115c:a1e0::/48) to port 21118, or via
-  the owner's server inside Tailscale. ranode stays registered with the public RustDesk server, but
-  a peer reaching it that way has a non-Tailscale address and is refused by the whitelist. A
-  Tailscale-range address that reaches ranode outside its Tailscale interface is refused as well
-  (decision 0009).
+  fd7a:115c:a1e0::/48, and on a company Craft Mac's ranode the office subnet) to port 21118, by
+  Tailscale IP or by RustDesk ID through the public RustDesk server, or via the owner's server
+  inside Tailscale. ranode is registered with the public RustDesk server; a peer arriving that way
+  on a direct path is checked by its own address, and ranode refuses every relayed incoming
+  connection before opening it (its address is only the server's claim; decision 0009 addendum),
+  so only a direct path from an allowed network gets in. A Tailscale-range address that reaches ranode outside its Tailscale
+  interface is refused (decision 0009), and an office-subnet address is accepted only on this
+  Mac's own address in that subnet on a non-tunnel interface with the route back through it.
 - ranode does not answer LAN discovery on UDP 21119 (upstream starts that listener only for an
   "installed" app), so other Macs find a ranode-only Mac through TCP 21118 alone.
 - The Tailscale module never talks to Tailscale's servers or LocalAPI; it only runs the local CLI.

@@ -99,6 +99,25 @@ local keys kept going to the peer; release both when the mode changes (fixed ko.
   and after ranode quits the main app receives only once it is restarted (before, its idle shared
   listener took over at once). This matches the cutover, which removes the main app.
 
+## A running ranode overwrites its local settings
+
+- Symptom: a value written into ranode's local settings (`RustDeskPublic_local.toml`) while ranode runs
+  is lost, or not applied.
+- Cause: the running process keeps its own copy of the local settings and writes it back; the
+  overrides are built once in `public_flavor::init()` at start.
+- Response: `--set-incoming-policy` refuses (exit 2) while ranode's IPC answers; quit ranode, run
+  it, start ranode. ranode installs no service, so only its GUI process can answer that IPC.
+
+## Ad-hoc signing drops the macOS privacy grants
+
+- Symptom: after installing a rebuilt ranode, Screen Recording, Accessibility and Input Monitoring
+  are off again although System Settings still lists the app.
+- Cause: macOS ties those grants to the code-signing identity; an ad-hoc signature differs with
+  every build.
+- Response: sign every internal build with the stable "ranode internal signing" identity
+  (operations, internal builds); never ad-hoc. A Developer ID build is a different identity and
+  needs the grants once again.
+
 ## Release on macOS: the nested `service` binary
 
 Notarization rejects the archive unless `Contents/MacOS/service` also has the hardened runtime;

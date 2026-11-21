@@ -6,8 +6,10 @@ A personal fork of upstream RustDesk 1.5.0 for the owner's own devices: Korean i
 한/영 key across macOS, Windows, Linux and Android, plus two macOS apps built from one tree —
 the main app "RustDesk (for korean)" (accepts incoming connections; to be removed from the owner's
 Macs) and the second app "RustDesk (forked ranode)" (on-prem tab over Tailscale, internet tab over
-the public RustDesk server, and from ko.23 also incoming from the tailnet). Users: the owner's Macs, the office Linux server, the owner's Android phone.
-Releases are public GitHub prereleases/releases, but nobody outside those devices is a target.
+the public RustDesk server, and from ko.23 also incoming from the tailnet; from ko.24 also by its
+RustDesk ID, through the same per-Mac whitelist). Users: the owner's Macs, the office Linux server, the owner's Android phone.
+Releases are public GitHub prereleases/releases; from ko.24 macOS builds may also ship as internal
+builds installed only on the owner's and the company's Macs. Nobody outside those devices is a target.
 Nothing goes back upstream; upstream changes are merged in. Everything below this fork section,
 from "# RustDesk Guide" on, is upstream's guide and stays byte-identical to upstream.
 
@@ -56,9 +58,14 @@ rustdesk-korean/
   `RustDeskPublic` / `rustdeskpublic`): macOS permissions, settings and the service hang on them.
 - Incoming connections to the owner's devices are accepted only from the Tailscale range
   100.64.0.0/10 (ranode from ko.23 also Tailscale's IPv6 fd7a:115c:a1e0::/48, and only when the
-  connection arrives on this Mac's Tailscale interface, decision 0009). No change may open a
-  device to the internet.
-- Signing keys are the owner's personal assets: never copy them into CI, a company store or the repo.
+  connection arrives on this Mac's Tailscale interface, decision 0009), plus the office subnet on
+  the company Craft Macs (set per Mac by the machine setup; from ko.24 only when the connection
+  arrives on this Mac's own address in that subnet on a non-tunnel interface, the same rule);
+  never from a public address, and ranode never through a relay. No change may open a device to
+  the internet.
+- The owner's personal release keys (Developer ID, notary key, Android key) never go into CI, a
+  company store or the repo. The stable internal signing identity is a machine-setup build asset
+  kept only in the vault and the build Mac's keychain, never in the repo or CI.
 
 ## Before you work
 
@@ -73,11 +80,13 @@ rustdesk-korean/
 
 ## Report to the owner at once
 
-- Anything that lets a non-Tailscale address connect in, or turns on the direct port outside the
-  Tailscale range.
-- A build whose Android signing certificate differs from the pinned one, or a macOS build that is
-  not "Notarized Developer ID".
-- A signing key or secret printed, committed, or found in a company store.
+- Anything that lets an address outside the Tailscale range (and, on the company Craft Macs, the
+  office subnet) connect in, or turns on the direct port for such an address.
+- A build whose Android signing certificate differs from the pinned one, a public macOS release
+  that is not "Notarized Developer ID", or an internal macOS build not signed with the stable
+  internal identity.
+- A personal release key printed, committed or found in a company store; any signing key or
+  secret printed or committed.
 - A change that alters a bundle id, app name or URL scheme.
 
 Everything else unresolved goes to `docs/tracking/findings.md`.
