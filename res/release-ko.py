@@ -217,7 +217,8 @@ def run(cmd, cwd=None, check=True, data=None, timeout=3600, out=None, env_extra=
         return p
     p = subprocess.run(cmd, cwd=cwd, input=data, capture_output=True, text=True, timeout=timeout, env=env)
     if check and p.returncode != 0:
-        raise Failed("%s: exit %d %s" % (" ".join(cmd[:3]), p.returncode, tail(p.stderr or p.stdout, 4)))
+        # First line: the command and exit code only; the output's tail follows on its own lines (log only).
+        raise Failed("%s: exit %d\n%s" % (" ".join(cmd[:3]), p.returncode, tail(p.stderr or p.stdout, 4)))
     return p
 
 
@@ -841,7 +842,7 @@ class Release:
                     raise Failed("%s is not signed by team %s" % (zname, TEAM_ID))
                 sp = run(["spctl", "-a", "-vv", "-t", "exec", a], check=False)
                 if sp.returncode != 0 or "Notarized Developer ID" not in sp.stderr + sp.stdout:
-                    raise Failed("%s: spctl says %s" % (zname, tail(sp.stderr + sp.stdout, 2)))
+                    raise Failed("%s: not \"Notarized Developer ID\"\n%s" % (zname, tail(sp.stderr + sp.stdout, 2)))
                 run(["xcrun", "stapler", "validate", a])
                 self.checks[zname] = "%s %s, team %s, Notarized Developer ID, stapled" % (bid, self.build_number,
                                                                                           TEAM_ID)
@@ -1214,7 +1215,9 @@ def run_logged(r, commit):
         return 75
     except Exception as e:  # noqa: BLE001 - every failure must end in result.json and the log
         msg = str(e) if isinstance(e, Failed) else "%s: %s" % (type(e).__name__, e)
-        r.result.update({"status": "failed", "message": msg})
+        # result.json (read by the watch job, which posts it) gets the first line only: what failed and its exit
+        # code. Tool output stays in this run's log on the release Mac.
+        r.result.update({"status": "failed", "message": msg.strip().splitlines()[0][:300] if msg.strip() else "?"})
         log("failed in %s: %s" % (r.result.get("step"), msg))
         if not isinstance(e, (Failed, OSError, subprocess.TimeoutExpired)):
             import traceback
