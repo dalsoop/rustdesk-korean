@@ -10,7 +10,7 @@ This file is written in English only.
 | Desktop 한/영 → peer OS key, macOS input-source switch, local hotkey pause | released ko.5–ko.10 | Rust unit tests: 26 in `hangul_key` run in CI (`fork-rust-tests.yml`, push and PRs); `platform::macos` (13, input source and hotkey flags) Mac-only; all passed on m5m1 2026-11-21 at 223d2e56; never tested with a Windows peer |
 | Fork update check | released ko.11 | Rust unit tests `fork_update` (4), `updater` (3) run in CI (push and PRs); passed on m5m1 2026-11-21 |
 | ranode (on-prem + internet tabs, onboarding, sections, identity, optional Tailscale, public sign-in) | released up to ko.24 (latest release, 2026-11-22) | Flutter tests `tailscale_test`, `public_onprem_test` run in CI on push and PRs. ko.22 signed build checked live on m5m1 (opened with `open -b` and from a terminal: device list and "Tailscale: … 연결됨") and on m5m2 after install (device list); ko.23 signed build checked live on m5m1 (below) |
-| ranode incoming from the tailnet (Tailscale interface and return route, IPv6 tailnet range, permanent password only, exclusive 21118, left-pane card) | released ko.23 (2026-11-21); receiving on m5m1 since its cutover (2026-11-22) | Rust tests `public_flavor` passed on m5m1 at 80d94a8b and 6b6ed6c7 and in CI. Live on m5m1 after the cutover: below ("ko.24 release and m5m1 cutover") |
+| ranode incoming from the tailnet (Tailscale interface and return route, IPv6 tailnet range, permanent password only, exclusive 21118, left-pane card) | released ko.23 (2026-11-21); receiving on m5m1 and m5m2 since their cutovers (2026-11-22) | Rust tests `public_flavor` passed on m5m1 at 80d94a8b and 6b6ed6c7 and in CI. Live on m5m1 and m5m2 after the cutovers: below ("ko.24 release and m5m1 cutover", "m5m2 cutover") |
 | ranode incoming by RustDesk ID, per-Mac incoming policy, relayed incoming refused, ID on the card | released ko.24 (2026-11-22) | Fork Rust tests (42) and `platform::macos` (13) passed on m5m1 at 6b6ed6c7; CI green. Live on m5m1: below |
 | Windows msi Cancel fix (issue #10, error 2866) | released ko.23 | msi built in CI. Checked live on 2026-11-22 with the ko.24 msi on a Windows 11 VM over an exe-installed RustDesk: full UI showed the "uninstall it first" dialog and Cancel ended setup with 1602, no 2866 in the log or the MsiInstaller events; `/qn` failed with 1603 and the `BlockSelfInstalledApp` message (issue #10 comment) |
 | Main app shown as "RustDesk (for korean)" | released ko.19 | installed on the owner's Macs |
@@ -36,7 +36,7 @@ as a login item; after the checks the main app bundle and its Dock item were mov
 `/Applications` (kept in a backup on m5m1 with a one-step rollback, see the task record).
 `RustDeskPublic --get-id` printed the main app's ID before and after, and the card shows it.
 Tailscale was never stopped, restarted or switched; SSH stayed up throughout. m5m2 and the
-MacBooks were not cut over (m5m2 keeps the main app and ranode ko.22).
+MacBooks were not cut over then (m5m2 followed the same night, "m5m2 cutover" below).
 
 Live checks (client: ranode ko.22 on m5m2; numbers of the ko.23 list in Remaining 1 and the ko.24
 list in Remaining 4 of the previous status):
@@ -58,6 +58,30 @@ list in Remaining 4 of the previous status):
 | ko.24 4: card shows the ID; `--set-incoming-policy` | passed: card shows the ID (the main app's, kept), the Tailscale address, "비밀번호: 설정됨"; with ranode running exit 2, a public or Tailscale-range subnet exit 1, nothing stored; the printed policy line not run (it would store a policy on an owner Mac, where the procedure sets none) |
 | ko.24 5: grants survive a rebuild signed with the stable identity | not run: no internal build yet |
 | LAN address from another Mac | not concluded: m5m2's ranode failed to open TCP to m5m1's LAN address before reaching it (no log line on m5m1), while `nc` from m5m2 reached 21118; see `findings.md` |
+
+## m5m2 cutover (2026-11-22)
+
+The other owner Mac, cut over by the same procedure at 00:58–01:09 KST after the owner's "진행"
+(2026-11-22, session m5m1). Before: the main app (6819) owned 21118, ranode ko.22 (6822) ran for
+outgoing use only, and no remote session was open in either app (no established connection on
+21118 or of either app, no `--cm` process). The owner's other apps were not touched; Tailscale was
+never stopped, restarted or switched; SSH stayed up throughout.
+
+Steps: ranode ko.24 installed (6822 → 6824, "Notarized Developer ID"); Accessibility and Screen
+Recording turned on for `net.ranode.rustdesk-public` in System Settings (Input Monitoring was
+already on); the main app's agent and daemon unloaded and their plists moved out; its
+`RustDesk.toml` copied over ranode's; ranode started and took 21118; `--get-id` printed the main
+app's ID (219847905, before and after; ranode's own ID until then was a different one); a new
+permanent password from the vault set with `--set-permanent-password` (`Done!`, exit 0); ranode
+added as a login item; after the check below the main app bundle was moved out of `/Applications`
+(kept in a backup on m5m2 with a one-step rollback; no Dock item). No incoming policy (owner Mac).
+
+| Item | Result |
+|---|---|
+| ko.23 1: tailnet Mac connects by Tailscale IP + permanent password and controls it | passed: m5m1's ranode ko.24 → m5m2's Tailscale IP, session opened with the new permanent password, m5m2's screen shown on m5m1, video service started on m5m2; input exercised (two macOS prompts on m5m2 answered through the session) |
+| ko.23 4: after the main app left, ranode accepts | passed (`lsof`: RustDeskPublic owns 21118 on m5m2) |
+| First start of ranode ko.24 as the receiving app | macOS asked on m5m2 to let ranode bypass the private window picker and to find devices on the local network; both allowed (as on m5m1) |
+| ko.23 10: update card | still not observed: m5m2 went from ko.22 straight to the ko.24 install |
 
 ## ko.23 release (2026-11-21)
 
@@ -90,14 +114,11 @@ still owns 21118. m5m2 keeps ranode ko.22.
 
 ## Remaining, in order
 
-1. **Machine setup follows the m5m1 cutover**: the machine-setup repo still lists m5m1 among the
-   Macs that keep the main app (dotfiles `fleet-app-watch.yaml` `rustdesk_main_macs` and README
-   "Which Macs run which app"; the k3s-prod `device-ops/fleet-app-watch` CronJob config), so its
-   daily check will report the missing main app on m5m1 until that list drops m5m1. The cutover
-   steps (operations "Cutover keeping the Mac's ID") are not yet a machine-setup script.
-2. **Cutover of the other owner Mac (m5m2)** by the same procedure, when the owner's open work
-   there allows a short stop of incoming connections; until then m5m2 keeps the main app.
-3. **Live checks still open** (from the ko.23 and ko.24 lists; done ones are in the table above):
+1. **Cutover steps as a machine-setup script**: both owner Macs (m5m1, m5m2) are cut over and the
+   machine-setup repo's list of Macs that keep the main app is now empty (its daily app check
+   expects ranode on every Mac and the main app on none); the cutover steps (operations "Cutover
+   keeping the Mac's ID") are not yet a machine-setup script.
+2. **Live checks still open** (from the ko.23 and ko.24 lists; done ones are in the table above):
    1. with the service stopped the card says "지금은 접속받지 않음 (서비스 중지됨)";
    2. on a Mac where Tailscale may be stopped: Tailscale off/on and a tailnet switch;
    3. a newer Latest shows the update card naming "RustDesk (forked ranode)" (ranode ko.22/ko.23
