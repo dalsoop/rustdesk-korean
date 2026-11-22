@@ -13,3 +13,4 @@ This file is written in English only.
 | 0007 | ranode stays registered with the public server while it accepts incoming (ko.24 addendum: ID shown and accepted) | 2026-11-17 |
 | 0008 | ranode accepts only its permanent password | 2026-11-17 |
 | 0009 | ranode trusts a Tailscale-range peer only on the Tailscale interface (ko.24 addendum: the same rule for the office subnet) | 2026-11-21 |
+| 0010 | ranode keeps each own device's access password, encrypted on the Mac, for its Tailscale address | 2026-11-22 |

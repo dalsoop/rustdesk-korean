@@ -17,7 +17,10 @@ This file is written in English only.
 
 ## Merged, not released
 
-- Nothing.
+- ko.25 (`version: 1.5.0+6825`): ranode keeps each own device's access password, encrypted on the
+  Mac, and the on-prem card connects with it (`--save-peer-password`, decision 0010). Released by
+  the watch job after the merge; the live check (card click without a password prompt) follows the
+  machine-setup install. Rust: ranode `cargo check --features flutter` and the fork tests on m5m1.
 
 ## Automatic release (2026-11-22)
 

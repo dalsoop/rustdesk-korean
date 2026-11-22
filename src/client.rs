@@ -3962,6 +3962,10 @@ impl LoginConfigHandler {
         if self.password.is_empty() {
             return None;
         }
+        // Korean fork: no hash of a saved password goes to other windows; they use it themselves.
+        if crate::public_flavor::has_saved_peer_password(&self.id) {
+            return None;
+        }
         serde_json::to_string(&ConnToken {
             password: self.password.clone(),
             password_source: self.password_source.clone(),
