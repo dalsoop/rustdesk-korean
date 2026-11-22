@@ -668,6 +668,17 @@ fn saved_peer_passwords_file() -> std::path::PathBuf {
     Config::path(format!("{APP_NAME}{SAVED_PEER_PASSWORDS_SUFFIX}"))
 }
 
+/// A missing file is empty; one that cannot be read or parsed is an error (the reason never
+/// quotes the file).
+fn load_saved_peer_passwords() -> Result<SavedPeerPasswords, String> {
+    match std::fs::read_to_string(saved_peer_passwords_file()) {
+        Ok(text) => hbb_common::toml::from_str(&text)
+            .map_err(|_| "the saved-passwords file is not valid".to_owned()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(SavedPeerPasswords::default()),
+        Err(e) => Err(format!("the saved-passwords file cannot be read ({:?})", e.kind())),
+    }
+}
+
 /// Saved passwords are filed only under a Tailscale address, in its canonical form: that is what
 /// the on-prem card connects to.
 fn saved_peer_key(id: &str) -> Option<String> {
@@ -685,10 +696,23 @@ pub fn saved_peer_password(id: &str) -> String {
     let Some(key) = saved_peer_key(id) else {
         return String::new();
     };
-    let saved: SavedPeerPasswords = config::load_path(saved_peer_passwords_file());
+    let Ok(saved) = load_saved_peer_passwords() else {
+        log::warn!("the saved passwords cannot be read; none used");
+        return String::new();
+    };
     let Some(stored) = saved.peers.get(&key) else {
         return String::new();
     };
+    // Only over this Mac's Tailscale interface, never to a LAN host that uses the same range.
+    let on_tailscale = key
+        .parse::<IpAddr>()
+        .ok()
+        .and_then(route_source)
+        .map_or(false, is_on_tailscale_interface);
+    if !on_tailscale {
+        log::warn!("{key} is not reached through Tailscale; its saved password is not used");
+        return String::new();
+    }
     let (password, decrypted, _) = decrypt_str_or_original(stored, SAVED_PEER_PASSWORD_ENC);
     if !decrypted || password.is_empty() {
         log::warn!("the saved password for {key} cannot be read on this Mac; not used");
@@ -712,10 +736,11 @@ fn save_peer_password(key: &str, password: &str) -> Result<(), String> {
     if !decrypted || back != password || encrypted == password {
         return Err("could not encrypt it on this Mac".to_owned());
     }
-    let file = saved_peer_passwords_file();
-    let mut saved: SavedPeerPasswords = config::load_path(file.clone());
+    // A file that exists but cannot be read is never replaced, so no saved entry is lost.
+    let mut saved = load_saved_peer_passwords()?;
     saved.peers.insert(key.to_owned(), encrypted);
-    config::store_path(file, saved).map_err(|e| e.to_string().replace(['\r', '\n'], " "))
+    config::store_path(saved_peer_passwords_file(), saved)
+        .map_err(|e| e.to_string().replace(['\r', '\n'], " "))
 }
 
 /// `--save-peer-password <Tailscale address>`, the password on stdin.
@@ -732,6 +757,11 @@ fn run_save_peer_password(rest: &[String]) -> i32 {
         eprintln!("Refused: usage --save-peer-password <Tailscale address>, the password on stdin.");
         return 1;
     };
+    // A terminal would echo what is typed; only a pipe is accepted.
+    if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        eprintln!("Refused: pipe the password in on stdin; typing it here would show it.");
+        return 1;
+    }
     let password = match read_password_input(rest, &mut std::io::stdin().lock()) {
         Ok(password) => password,
         Err(reason) => {

@@ -35,11 +35,13 @@ Not this module's scope: upstream's protocol, codecs, server services, `libs/hbb
   `build_overrides` skips any stored entry that is not a private IPv4 network, so a hand-edited
   value never weakens the floor. Overrides are not saved and win over saved values.
 - `--save-peer-password <Tailscale address>` (ranode only, decision 0010): password from stdin,
-  never argv; arguments are never echoed; root refused; only a Tailscale-range address is a key;
-  stored encrypted (`password_security`, `00`) in `RustDeskPublic_saved_peer_passwords.toml` only
-  after a decrypt round trip; exit 0 / 1 (refused input or root) / 2 (not saved). The app may run;
-  `saved_peer_password` reads the file on each new session (hook in `flutter::session_add`, only
-  when the caller gave no password) and logs only the address, never the value.
+  never argv, never a terminal (it would echo); arguments are never echoed; root refused; only a
+  Tailscale-range address is a key; stored encrypted (`password_security`, `00`) in
+  `RustDeskPublic_saved_peer_passwords.toml` only after a decrypt round trip, never over a file
+  that exists but does not parse; exit 0 / 1 (refused input or root) / 2 (not saved). The app may
+  run; `saved_peer_password` reads the file on each new session (hook in `flutter::session_add`,
+  only when the caller gave no password), uses a value only when `route_source` of the address is
+  on the Tailscale interface, and logs only the address, never the value.
 - `handle_cli` handles `--set-permanent-password` and `--set-incoming-policy` in ranode only.
   Password: from stdin, never argv; root refused; exit 0 / 1 (refused input) / 2 (ranode did not
   apply it). Policy: `--extra-subnets <list>|none`, `--approve-mode password|both`, each at most

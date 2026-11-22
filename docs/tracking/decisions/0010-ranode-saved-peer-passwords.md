@@ -14,8 +14,12 @@ apply. The owner chose a fork feature (2026-11-22, session m5m1: "fork에 기능
   reads one password from stdin and stores it in `RustDeskPublic_saved_peer_passwords.toml` in
   ranode's config folder (0600), encrypted with the Mac's key exactly as upstream encrypts its own
   stored passwords (`password_security`, version `00`). Only a Tailscale-range address is accepted
-  as the key; a value that does not decrypt back to the same password is never written. The app
-  need not be running; the file is read on every new session, never cached.
+  as the key; a value that does not decrypt back to the same password is never written; input from
+  a terminal (which would echo it) is refused; a file that exists but cannot be parsed is never
+  overwritten. The app need not be running; the file is read on every new session, never cached.
+- The saved value is used only when the route to that address leaves through this Mac's Tailscale
+  interface, so a LAN host in 100.64.0.0/10 (Tailscale off, carrier or hotel network) never gets an
+  answer computed from it.
 - When ranode starts a session to that exact address without a password from the caller (the
   on-prem card, the `rustdeskpublic://` link, a typed address), the saved value becomes upstream's
   preset password (`session_add` hook): upstream's `handle_hash` hashes it with the peer's salt and
@@ -34,6 +38,22 @@ apply. The owner chose a fork feature (2026-11-22, session m5m1: "fork에 기능
 
 ## Consequences
 - Anyone who can run code as the Mac's user can read the saved passwords, as with upstream's own
-  stored passwords; the file is useless on another Mac.
+  stored passwords. The key is the Mac's machine UUID (upstream's scheme, which the owner chose to
+  reuse); the UUID is not secret (upstream also sends it to the RustDesk server it registers with),
+  so the file together with that UUID decrypts elsewhere. The file never leaves the Mac.
+- Once logged in, upstream treats the session's salted password hash like a typed password: it
+  goes into the connection token of further windows of that session (file transfer, terminal),
+  which the main window logs, and into the peer's recent entry when "remember password" was already
+  on for that address. That is upstream's existing behaviour for every password and not changed
+  here; the hash works only for that device's current password.
+- The key is the address only, not the device's RustDesk identity (a direct IP connection does not
+  verify it). Another tailnet the Mac switches to could hold a different device at the same
+  address; it would receive a login answer derived from the saved password, which it cannot use to
+  reach the real device unless it can also reach that device through Tailscale.
 - A device whose Tailscale address changes needs its entry saved again under the new address.
-- A stale value costs one failed attempt in the peer's attempt limiter before the prompt appears.
+- A stale value costs one failed attempt in the peer's attempt limiter before the prompt appears,
+  and keeps taking precedence over a password remembered in the prompt until it is saved again.
+- A password that starts with `00` followed by valid Base64 is taken by upstream's helper for
+  ciphertext and cannot be saved (exit 2, nothing written).
+- Two `--save-peer-password` runs at the same moment on one Mac may keep only one of the entries;
+  machine setup runs them one after another.
