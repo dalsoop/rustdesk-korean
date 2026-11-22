@@ -13,7 +13,9 @@ refusal, hotkey tests), `flutter_ffi.rs` (`main_is_public_flavor`, `main_public_
 `main_public_direct_port_busy`,
 `session_set_remote_keyboard_active`, `main_init_input_source` which restores the Mac's hotkeys
 after a crash, the `local-hangul-keys-status` option), `flutter.rs` (`session_add`:
-`public_flavor::saved_peer_password` as the preset password), `server/connection.rs` (`on_open`:
+`public_flavor::saved_peer_password` as the preset password, and `remember` off for such a
+session), `client.rs` (`get_conn_token`: no token when `public_flavor::has_saved_peer_password`),
+`server/connection.rs` (`on_open`:
 `public_flavor::incoming_path_allowed` after the whitelist), `server.rs`
 (`create_relay_connection_`: `public_flavor::relayed_incoming_allowed` first), `rendezvous_mediator.rs`
 (`direct_server`: `public_flavor::listen_direct` in place of `listen_any`, and
@@ -40,8 +42,9 @@ Not this module's scope: upstream's protocol, codecs, server services, `libs/hbb
   `RustDeskPublic_saved_peer_passwords.toml` only after a decrypt round trip, never over a file
   that exists but does not parse; exit 0 / 1 (refused input or root) / 2 (not saved). The app may
   run; `saved_peer_password` reads the file on each new session (hook in `flutter::session_add`,
-  only when the caller gave no password), uses a value only when `route_source` of the address is
-  on the Tailscale interface, and logs only the address, never the value.
+  only when the caller gave no password), uses a value only when no proxy is set and
+  `route_source` of the address is on the Tailscale interface, and logs only the address, never
+  the value. Such a session never remembers the hash and hands no conn token to other windows.
 - `handle_cli` handles `--set-permanent-password` and `--set-incoming-policy` in ranode only.
   Password: from stdin, never argv; root refused; exit 0 / 1 (refused input) / 2 (ranode did not
   apply it). Policy: `--extra-subnets <list>|none`, `--approve-mode password|both`, each at most

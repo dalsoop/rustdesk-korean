@@ -703,6 +703,11 @@ pub fn saved_peer_password(id: &str) -> String {
     let Some(stored) = saved.peers.get(&key) else {
         return String::new();
     };
+    // A proxy would carry the login past the route checked below.
+    if Config::get_socks().is_some() {
+        log::warn!("a proxy is set; the saved password for {key} is not used");
+        return String::new();
+    }
     // Only over this Mac's Tailscale interface, never to a LAN host that uses the same range.
     let on_tailscale = key
         .parse::<IpAddr>()
@@ -720,6 +725,15 @@ pub fn saved_peer_password(id: &str) -> String {
     }
     log::info!("using the saved password for {key}");
     password
+}
+
+/// Whether a password is saved for `id`: such a session hands no password hash to other windows
+/// (`LoginConfigHandler::get_conn_token`); they take the saved password themselves.
+pub fn has_saved_peer_password(id: &str) -> bool {
+    is_public()
+        && saved_peer_key(id).map_or(false, |key| {
+            load_saved_peer_passwords().map_or(false, |saved| saved.peers.contains_key(&key))
+        })
 }
 
 /// Encrypted with this Mac's key, as the app stores its own passwords; a value that would not

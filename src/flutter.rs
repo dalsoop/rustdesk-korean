@@ -1320,9 +1320,15 @@ pub fn session_add(
         None
     };
     // Korean fork: ranode's saved password for an own device's Tailscale address (decision 0010).
-    if crate::public_flavor::is_public() && preset_password.is_empty() && shared_password.is_none() {
+    let from_saved_password = if crate::public_flavor::is_public()
+        && preset_password.is_empty()
+        && shared_password.is_none()
+    {
         preset_password = crate::public_flavor::saved_peer_password(id);
-    }
+        !preset_password.is_empty()
+    } else {
+        false
+    };
 
     let session: Session<FlutterHandler> = Session {
         password: preset_password,
@@ -1348,6 +1354,10 @@ pub fn session_add(
         shared_password,
         conn_token,
     );
+    // Korean fork: never copy the saved password's hash into the peer's remembered password.
+    if from_saved_password {
+        session.lc.write().unwrap().remember = false;
+    }
 
     let session = Arc::new(session.clone());
     sessions::insert_session(session_id.to_owned(), conn_type, session.clone());

@@ -41,11 +41,14 @@ apply. The owner chose a fork feature (2026-11-22, session m5m1: "fork에 기능
   stored passwords. The key is the Mac's machine UUID (upstream's scheme, which the owner chose to
   reuse); the UUID is not secret (upstream also sends it to the RustDesk server it registers with),
   so the file together with that UUID decrypts elsewhere. The file never leaves the Mac.
-- Once logged in, upstream treats the session's salted password hash like a typed password: it
-  goes into the connection token of further windows of that session (file transfer, terminal),
-  which the main window logs, and into the peer's recent entry when "remember password" was already
-  on for that address. That is upstream's existing behaviour for every password and not changed
-  here; the hash works only for that device's current password.
+- The session's salted password hash never leaves Rust either: a session on a saved password
+  turns off upstream's "remember password" for that peer (which also drops a hash remembered
+  earlier, and with it the address-book sync event), and `get_conn_token` gives further windows of
+  that session (file transfer, terminal) no token, so they log in with the saved password
+  themselves instead of receiving the hash through Dart and the main window's call log.
+- With a proxy set in ranode the saved password is not used (the proxy would carry the login past
+  the route check). The route is checked when a session starts; a reconnect of that session reuses
+  the result.
 - The key is the address only, not the device's RustDesk identity (a direct IP connection does not
   verify it). Another tailnet the Mac switches to could hold a different device at the same
   address; it would receive a login answer derived from the saved password, which it cannot use to
