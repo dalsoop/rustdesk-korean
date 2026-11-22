@@ -1319,6 +1319,10 @@ pub fn session_add(
     } else {
         None
     };
+    // Korean fork: ranode's saved password for an own device's Tailscale address (decision 0010).
+    if crate::public_flavor::is_public() && preset_password.is_empty() && shared_password.is_none() {
+        preset_password = crate::public_flavor::saved_peer_password(id);
+    }
 
     let session: Session<FlutterHandler> = Session {
         password: preset_password,

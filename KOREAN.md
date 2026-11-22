@@ -211,6 +211,7 @@ Tailscale is optional (from ko.18). The app shows the on-prem tab only when Tail
 - **온프레미스**: 프로필은 이 맥의 Tailscale 계정 프로필입니다(앱에 서버 주소나 키를 넣지 않습니다).
   - 켜진 망의 기기를 모두 카드로 보여 주고, RustDesk 직접 접속 포트(21118)가 열렸는지 `접속 가능`/`접속 불가`/`확인 중`으로 표시합니다.
   - 카드를 누르면 그 기기의 지금 Tailscale IP 로 바로 접속합니다. 접속받는 쪽은 `direct-server=Y` 가 필요합니다. 우리 Mac 은 dotfiles, pop-os 는 host-infra 가 켭니다.
+  - 저장된 접속 비밀번호(ko.25 부터): 그 Tailscale 주소의 비밀번호를 이 Mac 에 저장해 두면 카드를 눌렀을 때 비밀번호 창 없이 바로 들어갑니다. 저장은 `printf '%s\n' "$PASSWORD" | "/Applications/RustDesk (forked ranode).app/Contents/MacOS/RustDeskPublic" --save-peer-password <상대 Tailscale IPv4>` 로 하고(표준 입력으로만, root 로는 안 됨, 앱이 떠 있어도 됨), 성공하면 `Saved for <주소>.` 를 찍습니다. 비밀번호는 이 Mac 의 키로 암호화되어 이 앱의 설정 폴더(`RustDeskPublic_saved_peer_passwords.toml`)에만 남고, 화면·로그·명령줄에 나오지 않습니다. 저장된 비밀번호가 틀리면 평소처럼 "잘못된 비밀번호" 창이 뜹니다. 우리 Mac 에는 머신 설정이 Bitwarden 에서 바로 넣습니다.
   - 켜지지 않은 망을 고르면 전환 버튼과 경고를 보여 주고, 확인을 받은 뒤에 Tailscale 프로필을 바꿉니다.
   - 최근·즐겨찾기는 망 + 기기 이름으로 기억합니다.
 - **인터넷**: 원래 홈 화면(공용 서버, 공용 계정)입니다. LAN 발견 탭과 Tailscale IP 기록은 빠집니다.

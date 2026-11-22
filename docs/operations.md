@@ -208,6 +208,22 @@ The last command runs as the logged-in user (never `sudo`), needs ranode running
 and exits 0; exit 2 means ranode was not running or did not apply it. Take `$PASSWORD` from the
 vault without echoing it. ranode then needs Screen Recording, Accessibility and Input Monitoring.
 
+### Saved passwords of the own devices (from ko.25, decision 0010)
+
+On each controller Mac, as the logged-in user (ranode may be running), once per target device and
+again after that device's permanent password or Tailscale address changes:
+
+```sh
+printf '%s\n' "$PASSWORD" | "/Applications/RustDesk (forked ranode).app/Contents/MacOS/RustDeskPublic" --save-peer-password <target Tailscale IPv4>
+```
+
+It prints `Saved for <address>.` and exits 0; 1 means refused input (no Tailscale address, password
+on the command line, empty, root), 2 not saved. Take `$PASSWORD` from the vault without echoing it
+(the machine setup pipes `bw-agent exec … --stdin` into it over ssh). From then on a click on that
+device's on-prem card connects without the password prompt; ranode's log says only "using the saved
+password for <address>". To drop an entry, remove its line from
+`~/Library/Preferences/com.carriez.RustDeskPublic/RustDeskPublic_saved_peer_passwords.toml`.
+
 ### Cutover keeping the Mac's ID (from ko.24; run by the machine-setup repo)
 
 1. Quit the main app and ranode. Remove the main app, or at least disable everything that starts
