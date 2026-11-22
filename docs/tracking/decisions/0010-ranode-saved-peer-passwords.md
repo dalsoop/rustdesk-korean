@@ -47,8 +47,15 @@ apply. The owner chose a fork feature (2026-11-22, session m5m1: "fork에 기능
   that session (file transfer, terminal) no token, so they log in with the saved password
   themselves instead of receiving the hash through Dart and the main window's call log.
 - With a proxy set in ranode the saved password is not used (the proxy would carry the login past
-  the route check). The route is checked when a session starts; a reconnect of that session reuses
-  the result.
+  the route check). The route and the proxy are checked when a session starts; a reconnect of that
+  session reuses the result (known limit: a proxy set or a tailnet switched during an open session).
+- Whether a session's windows get a token is decided from the file, not from how the session
+  logged in (known limits, no new per-session state): an entry removed while a session to that
+  address is open lets that session's next window receive the hash as upstream does for typed
+  passwords; a session logged in with a typed password to an address that has an entry gives its
+  next window no token, so that window uses the saved password or asks again. A saved-password
+  session also clears a password remembered earlier for that address (upstream's own clearing when
+  "remember" is off).
 - The key is the address only, not the device's RustDesk identity (a direct IP connection does not
   verify it). Another tailnet the Mac switches to could hold a different device at the same
   address; it would receive a login answer derived from the saved password, which it cannot use to
