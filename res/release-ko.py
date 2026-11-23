@@ -538,13 +538,14 @@ class Release:
     def win_start(self, run_dir, bridge, script):
         # The inputs go to a folder of this call only; the start action, under its lock, moves them into the run
         # folder only when it admits this build, so a build already running never sees its inputs change.
-        stage = "%s/stage-%d-%d" % (run_dir, os.getpid(), int(time.time() * 1000))
+        leaf = "stage-%d-%d" % (os.getpid(), int(time.time() * 1000))
+        stage = "%s/%s" % (run_dir, leaf)
         self.win(["New-Item -ItemType Directory -Force -Path '%s/bridge' | Out-Null" % stage])
         run(["scp", "-q", "-o", "BatchMode=yes", script, "%s:%s/build.ps1" % (WIN_HOST, stage)])
         run(["scp", "-q", "-o", "BatchMode=yes"] + [os.path.join(bridge, f) for f in BRIDGE_FILES]
             + ["%s:%s/bridge/" % (WIN_HOST, stage)])
         p = self.win(["pwsh", "-NoProfile", "-File", WIN_WORK + "/release-ko-build-windows.ps1", "-Action", "start",
-                      "-Commit", self.sha, "-Stage", stage], check=False)
+                      "-Commit", self.sha, "-Stage", leaf], check=False)
         if p.returncode == 3:
             raise Pending("%s is building another commit (%s)" % (WIN_HOST, p.stdout.strip()))
         if p.returncode != 0:
@@ -610,6 +611,7 @@ class Release:
             raise Failed("no bridge output of %s (the linux step collects it from %s)" % (self.short, LINUX_JOB))
         run_dir = "%s/runs/%s" % (WIN_WORK, self.sha)
         script = os.path.join(TOOLS, "res", "release-ko-build-windows.ps1")
+        self.win(["New-Item -ItemType Directory -Force -Path '%s' | Out-Null" % run_dir])
         # This copy answers `status`; the build runs its own copy in the run folder.
         run(["scp", "-q", "-o", "BatchMode=yes", script, "%s:%s/release-ko-build-windows.ps1" % (WIN_HOST, WIN_WORK)])
         # A finished build this driver refused (wrong commit or version, missing or changed files): its reported

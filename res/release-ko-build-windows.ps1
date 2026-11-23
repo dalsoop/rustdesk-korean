@@ -26,9 +26,9 @@ param(
     [ValidateSet('start', 'status', 'build')][string]$Action = 'status',
     [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{40}$')][string]$Commit,
     [string]$Work = 'C:\build\rdk',
-    # start: the folder (under the run folder) with this submission's build.ps1 and bridge\; moved into the run
-    # folder only when this start is admitted, removed otherwise.
-    [string]$Stage = ''
+    # start: the name of a folder in the run folder (stage-<n>-<n>) holding this submission's build.ps1 and bridge\;
+    # its files move into the run folder only when this start is admitted, and the folder is removed either way.
+    [ValidatePattern('^(stage-\d+-\d+)?$')][string]$Stage = ''
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -92,6 +92,14 @@ if ($Action -eq 'status') {
     exit 0
 }
 if ($Action -eq 'start') {
+    $StageDir = ''
+    if ($Stage) {
+        $StageDir = Join-Path $Run $Stage
+        $item = Get-Item -LiteralPath $StageDir -Force -ErrorAction SilentlyContinue
+        if (-not $item -or -not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "stage folder $StageDir is missing or not a plain folder"
+        }
+    }
     # Admission one at a time: the check and the hand-over to the task happen under an exclusive lock.
     $lock = $null
     for ($i = 0; -not $lock -and $i -lt 120; $i++) {
@@ -99,24 +107,24 @@ if ($Action -eq 'start') {
         catch [IO.IOException] { Start-Sleep -Seconds 1 }
     }
     if (-not $lock) {
-        if ($Stage) { Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue }
+        if ($StageDir) { Remove-Item -LiteralPath $StageDir -Recurse -Force -ErrorAction SilentlyContinue }
         Write-Output 'another start holds the lock'; exit 3
     }
     try {
         $st = Get-RunState
         if ($st.busy_with -or $st.state -eq 'running') {
             # A build already running keeps its own inputs.
-            if ($Stage) { Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue }
+            if ($StageDir) { Remove-Item -LiteralPath $StageDir -Recurse -Force -ErrorAction SilentlyContinue }
             if ($st.busy_with) { Write-Output "busy with $($st.busy_with)"; exit 3 }
             Write-Output 'already running'; exit 0
         }
         $inputs = @('build.ps1', 'bridge\bridge_generated.rs', 'bridge\bridge_generated.io.rs', 'bridge\generated_bridge.dart',
                     'bridge\generated_bridge.freezed.dart', 'bridge\bridge_generated.h')
-        if ($Stage) {
-            foreach ($f in $inputs) { if (-not (Test-Path (Join-Path $Stage $f))) { throw "missing $Stage\$f" } }
+        if ($StageDir) {
+            foreach ($f in $inputs) { if (-not (Test-Path -LiteralPath (Join-Path $StageDir $f))) { throw "missing $StageDir\$f" } }
             New-Item -ItemType Directory -Force -Path $Bridge | Out-Null
-            foreach ($f in $inputs) { Copy-Item -Force (Join-Path $Stage $f) (Join-Path $Run $f) }
-            Remove-Item -Recurse -Force $Stage
+            foreach ($f in $inputs) { Copy-Item -LiteralPath (Join-Path $StageDir $f) -Destination (Join-Path $Run $f) -Force }
+            Remove-Item -LiteralPath $StageDir -Recurse -Force
         }
         foreach ($f in $inputs) {
             if (-not (Test-Path (Join-Path $Run $f))) { throw "missing $Run\$f" }
