@@ -516,13 +516,15 @@ class Release:
                 rec = json.load(f)
         except (OSError, ValueError):
             raise Failed("no record of the Windows build (windows-build.json)")
-        info = rec.get("info") or {}
+        if not isinstance(rec, dict) or not isinstance(rec.get("info"), dict) or not isinstance(rec.get("sha256"), dict):
+            raise Failed("the record of the Windows build (windows-build.json) is malformed")
+        info = rec["info"]
         problem = self.win_info_problem(info)
         if problem:
             raise Failed("the Windows files: %s" % problem)
         for key, (_, name) in self.win_names().items():
             path = os.path.join(self.assets, name)
-            if not os.path.isfile(path) or sha256(path) != (rec.get("sha256") or {}).get(name):
+            if not os.path.isfile(path) or sha256(path) != rec["sha256"].get(name):
                 raise Failed("%s is missing or not the file win-build reported" % name)
             if os.path.getsize(path) < 1 << 20:
                 raise Failed("%s is suspiciously small" % name)
@@ -534,11 +536,15 @@ class Release:
         self.build_hosts["windows"] = "%s (VM %s), outside the build queue" % (WIN_HOST, info.get("host"))
 
     def win_start(self, run_dir, bridge, script):
-        run(["scp", "-q", "-o", "BatchMode=yes", script, "%s:%s/build.ps1" % (WIN_HOST, run_dir)])
+        # The inputs go to a folder of this call only; the start action, under its lock, moves them into the run
+        # folder only when it admits this build, so a build already running never sees its inputs change.
+        stage = "%s/stage-%d-%d" % (run_dir, os.getpid(), int(time.time() * 1000))
+        self.win(["New-Item -ItemType Directory -Force -Path '%s/bridge' | Out-Null" % stage])
+        run(["scp", "-q", "-o", "BatchMode=yes", script, "%s:%s/build.ps1" % (WIN_HOST, stage)])
         run(["scp", "-q", "-o", "BatchMode=yes"] + [os.path.join(bridge, f) for f in BRIDGE_FILES]
-            + ["%s:%s/bridge/" % (WIN_HOST, run_dir)])
+            + ["%s:%s/bridge/" % (WIN_HOST, stage)])
         p = self.win(["pwsh", "-NoProfile", "-File", WIN_WORK + "/release-ko-build-windows.ps1", "-Action", "start",
-                      "-Commit", self.sha], check=False)
+                      "-Commit", self.sha, "-Stage", stage], check=False)
         if p.returncode == 3:
             raise Pending("%s is building another commit (%s)" % (WIN_HOST, p.stdout.strip()))
         if p.returncode != 0:
@@ -550,7 +556,10 @@ class Release:
         """Copies a finished build here. Returns why the build itself is unusable (it must be built again), or None.
         A failed copy raises Failed instead: the next attempt copies the same build again."""
         names = self.win_names()
-        reported = {f.get("name"): f.get("sha256") for f in st.get("files") or []}
+        files = st.get("files")
+        if not isinstance(files, list) or not all(isinstance(f, dict) for f in files):
+            return "its status lists no files"
+        reported = {f.get("name"): f.get("sha256") for f in files}
         missing = [s for s in [s for s, _ in names.values()] + ["build-info.json"] if not reported.get(s)]
         if missing:
             return "its output lacks %s" % ", ".join(missing)
@@ -567,6 +576,8 @@ class Release:
                 info = json.load(f)
         except ValueError:
             return "its build-info.json is unreadable"
+        if not isinstance(info, dict):
+            return "its build-info.json is not an object"
         problem = self.win_info_problem(info)
         if problem:
             return problem
@@ -599,7 +610,6 @@ class Release:
             raise Failed("no bridge output of %s (the linux step collects it from %s)" % (self.short, LINUX_JOB))
         run_dir = "%s/runs/%s" % (WIN_WORK, self.sha)
         script = os.path.join(TOOLS, "res", "release-ko-build-windows.ps1")
-        self.win(["New-Item -ItemType Directory -Force -Path '%s/bridge' | Out-Null" % run_dir])
         # This copy answers `status`; the build runs its own copy in the run folder.
         run(["scp", "-q", "-o", "BatchMode=yes", script, "%s:%s/release-ko-build-windows.ps1" % (WIN_HOST, WIN_WORK)])
         # A finished build this driver refused (wrong commit or version, missing or changed files): its reported

@@ -5,13 +5,13 @@
 #   <Work>\runs\<commit>\out\rustdesk-1.5.0-x86_64.msi
 #   <Work>\runs\<commit>\out\build-info.json             (commit, MSI ProductVersion, rustdesk.exe FileVersion)
 #
-#   pwsh -NoProfile -File release-ko-build-windows.ps1 -Action start  -Commit <sha> [-Work C:\build\rdk]
+#   pwsh -NoProfile -File release-ko-build-windows.ps1 -Action start  -Commit <sha> [-Stage <folder>] [-Work C:\build\rdk]
 #   pwsh -NoProfile -File release-ko-build-windows.ps1 -Action status -Commit <sha> [-Work C:\build\rdk]
 #
-# The driver on m5m1 first copies this script to <Work>\runs\<commit>\build.ps1 and the flutter_rust_bridge
-# output of the commit (bridge_generated.rs, bridge_generated.io.rs, generated_bridge.dart,
-# generated_bridge.freezed.dart, bridge_generated.h; made by gujoai/apps/upstream-mono's CI job rustdesk:bridge)
-# to <Work>\runs\<commit>\bridge\. `start` runs the build as the scheduled task `rdk-release-build` (it outlives
+# The driver on m5m1 first copies this script as build.ps1 and the flutter_rust_bridge output of the commit
+# (bridge_generated.rs, bridge_generated.io.rs, generated_bridge.dart, generated_bridge.freezed.dart,
+# bridge_generated.h; made by gujoai/apps/upstream-mono's CI job rustdesk:bridge) into bridge\ of a staging folder
+# of its own (-Stage); an admitted `start` moves them to <Work>\runs\<commit>\. `start` runs the build as the scheduled task `rdk-release-build` (it outlives
 # the SSH session; one build at a time; exit 3 while another commit is building) with its output in
 # <Work>\runs\<commit>\build.log; `status` prints one JSON line (state none/running/done/failed, the exit code
 # and the output files with their sha256).
@@ -25,7 +25,10 @@
 param(
     [ValidateSet('start', 'status', 'build')][string]$Action = 'status',
     [Parameter(Mandatory)][ValidatePattern('^[0-9a-f]{40}$')][string]$Commit,
-    [string]$Work = 'C:\build\rdk'
+    [string]$Work = 'C:\build\rdk',
+    # start: the folder (under the run folder) with this submission's build.ps1 and bridge\; moved into the run
+    # folder only when this start is admitted, removed otherwise.
+    [string]$Stage = ''
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -95,13 +98,27 @@ if ($Action -eq 'start') {
         try { $lock = [IO.File]::Open((Join-Path $Global 'start.lock'), 'OpenOrCreate', 'ReadWrite', 'None') }
         catch [IO.IOException] { Start-Sleep -Seconds 1 }
     }
-    if (-not $lock) { Write-Output 'another start holds the lock'; exit 3 }
+    if (-not $lock) {
+        if ($Stage) { Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue }
+        Write-Output 'another start holds the lock'; exit 3
+    }
     try {
         $st = Get-RunState
-        if ($st.busy_with) { Write-Output "busy with $($st.busy_with)"; exit 3 }
-        if ($st.state -eq 'running') { Write-Output 'already running'; exit 0 }
-        foreach ($f in @('build.ps1', 'bridge\bridge_generated.rs', 'bridge\bridge_generated.io.rs', 'bridge\generated_bridge.dart',
-                         'bridge\generated_bridge.freezed.dart', 'bridge\bridge_generated.h')) {
+        if ($st.busy_with -or $st.state -eq 'running') {
+            # A build already running keeps its own inputs.
+            if ($Stage) { Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue }
+            if ($st.busy_with) { Write-Output "busy with $($st.busy_with)"; exit 3 }
+            Write-Output 'already running'; exit 0
+        }
+        $inputs = @('build.ps1', 'bridge\bridge_generated.rs', 'bridge\bridge_generated.io.rs', 'bridge\generated_bridge.dart',
+                    'bridge\generated_bridge.freezed.dart', 'bridge\bridge_generated.h')
+        if ($Stage) {
+            foreach ($f in $inputs) { if (-not (Test-Path (Join-Path $Stage $f))) { throw "missing $Stage\$f" } }
+            New-Item -ItemType Directory -Force -Path $Bridge | Out-Null
+            foreach ($f in $inputs) { Copy-Item -Force (Join-Path $Stage $f) (Join-Path $Run $f) }
+            Remove-Item -Recurse -Force $Stage
+        }
+        foreach ($f in $inputs) {
             if (-not (Test-Path (Join-Path $Run $f))) { throw "missing $Run\$f" }
         }
         Remove-Item "$Run\exit", "$Run\build.log" -ErrorAction SilentlyContinue
