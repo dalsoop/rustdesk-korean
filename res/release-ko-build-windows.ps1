@@ -242,6 +242,9 @@ Exec git @('-C', $Top, 'checkout', '-q', '-f', $TopMostCommit)
 Exec msbuild @("$Top\WindowInjection\WindowInjection.vcxproj", '-p:Configuration=Release', '-p:Platform=x64', '/p:TargetVersion=Windows10', '-p:PlatformToolset=v143', '-nologo', '-v:minimal')
 
 # ---------- RustDesk ----------
+# build.rs writes src\version.rs, which `git clean` removed; with target\ kept, cargo would treat the build script as
+# fresh and skip it (E0583). A new mtime makes it run again.
+(Get-Item 'build.rs').LastWriteTime = Get-Date
 Exec python @('.\build.py', '--portable', '--flutter', '--skip-portable-pack', '--hwcodec', '--vram')
 if (Test-Path 'rustdesk') { Remove-Item -Recurse -Force 'rustdesk' }
 Move-Item 'flutter\build\windows\x64\runner\Release' 'rustdesk'
