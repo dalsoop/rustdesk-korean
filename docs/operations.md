@@ -35,7 +35,9 @@ git submodule update --init --recursive      # libs/hbb_common
 ```
 
 Toolchains: the versions pinned in `.github/workflows/build-desktop-ko.yml` (`FLUTTER_VERSION`
-3.24.5, `MAC_RUST_VERSION` 1.81, vcpkg commit) and upstream's vcpkg dependencies.
+3.24.5, `RUST_VERSION` 1.75, `MAC_RUST_VERSION` 1.81, vcpkg commit) and upstream's vcpkg
+dependencies. The release builds keep the same pins: `res/release-ko-build-windows.ps1` (Windows)
+and the Linux job of `gujoai/apps/upstream-mono`'s CI.
 
 The Flutter↔Rust bridge files are generated and git-ignored; without them `flutter analyze` and
 every build fail. Generate them after cloning and after any change to `src/flutter_ffi.rs`:
@@ -83,6 +85,14 @@ is delegated to agents (owner, 2026-11-06), and from 2026-11-22 the release runs
 진행합니다. 서명 키는 지금처럼 m5m1 밖으로 나가지 않습니다."). macOS builds run through the build
 queue (`build-pipeline submit … --host m5m1`), never on the M1 MacBooks.
 
+Where each part is built (from 2026-11-23; the owner's choice "둘 다 옮김" in session m5m1, which moved
+Windows and Linux off GitHub-hosted runners): macOS on m5m1, and every signature there; Linux (the
+deb) and Android (the unsigned APK) in the GitLab CI of `gujoai/apps/upstream-mono` (jobs
+`rustdesk:linux-x64` and `rustdesk:android-arm64`); Windows (exe and msi, unsigned as before) on the
+Windows build VM `win-build` with `res/release-ko-build-windows.ps1`. Neither CI nor the VM holds a
+signing key or a publishing token; assembly, checks and the GitHub release happen on m5m1. A run's
+`result.json` lists the host of each part under `build_hosts`.
+
 ### Automatic release
 
 To release ko.N, merge the PR that sets `version: 1.5.0+68NN` in `flutter/pubspec.yaml` (with the
@@ -95,13 +105,15 @@ Nothing else is needed:
   it runs `res/release-ko.py <head>` from a checkout of that head. No workflow of this public
   repository runs on m5m1 (no self-hosted runner): only code merged to the default branch is run.
 - **Driver** `res/release-ko.py` does the steps of "By hand" below, each resumable (a step whose
-  result is already on disk and passes its checks is skipped): Windows/Linux files from the
-  "Build desktop" run on the commit (started with `workflow_dispatch` when the push was docs-only
-  and the branch head is still that commit; a failed run is re-run once); the upstream-mono MR that
+  result is already on disk and passes its checks is skipped): the upstream-mono MR that
   moves `rustdesk/` to the commit, put in its merge queue (a blocked, held or draft MR stops the run
   with its link; it is never re-queued), and the unsigned APK of the newest `rustdesk:android-arm64`
   job on a main pipeline whose `rustdesk/` equals the commit's tree file by file, signed with
-  `res/android-sign-release.sh`; both
+  `res/android-sign-release.sh`; the deb and the flutter_rust_bridge output of the
+  `rustdesk:linux-x64` job of such a pipeline; the Windows build on `win-build`
+  (`res/release-ko-build-windows.ps1`, copied there with that bridge output and run as a scheduled
+  task, so it outlives the SSH session; the exe, msi and the commit and MSI version it reports are
+  copied back and compared by sha256; a failed build is started again on the next attempt); both
   macOS apps built through the build queue (`res/release-ko-build-macos.sh`) and signed, notarized
   and zipped with `res/osx-sign-notarize.sh`; checks of every file; `.sha256` files; notes; a draft
   release with the 12 files, GitHub's sha256 of each compared with ours; then publish and Latest.
@@ -118,8 +130,8 @@ Nothing else is needed:
 - **Notes**: `res/release-notes/1.5.0-ko.N.md` at the release commit when present (first line
   `# <short title>`, the rest is "what changed"); otherwise the titles of the PRs merged since the
   previous release. The version numbers and the file list are always added.
-- **Waiting and failures**: a run waits at most 10 minutes for GitHub Actions, the upstream-mono
-  merge queue or the Android job, then ends with exit 75; the next tick continues. A failed run is
+- **Waiting and failures**: a run waits at most 10 minutes for the upstream-mono merge queue, a
+  CI job or the Windows build, then ends with exit 75; the next tick continues. A failed run is
   retried after an hour, a refused one (commit not on the branch, bad version line) not until the
   head changes. Start, waiting, failure and success are posted in ranode-corp `#970-에이전트-작업`,
   thread `1795280360.472489`.
@@ -151,7 +163,7 @@ Exit 0 done, 1 failed (see `~/work/rdk-release/1.5.0-ko.N/logs/`), 2 refused, 75
 The steps it automates:
 
 1. Merge the PR that sets `version: 1.5.0+68NN` in `flutter/pubspec.yaml` (and the KOREAN.md notes)
-   into `feat/sync-upstream-1.5.0`. CI then builds Windows/Linux artifacts.
+   into `feat/sync-upstream-1.5.0`.
 2. Build both macOS apps from that commit on the build Mac; move them to the signing Mac.
 3. On the signing Mac:
    ```sh
@@ -166,9 +178,12 @@ The steps it automates:
    (an MR moving its `rustdesk/` subtree to the release commit), then on the signing Mac:
    `res/android-sign-release.sh <unsigned.apk> rustdesk-1.5.0-ko.N-aarch64.apk` (checks the pinned
    certificate, writes `.sha256`).
-5. Download the CI artifacts of the release commit and rename them to the published names
-   `rustdesk-1.5.0-ko.N-x86_64.exe`, `…-x86_64.msi`, `…-x86_64.deb` (CI names them
-   `rustdesk-1.5.0-ko-windows-x86_64` etc.; the Windows updater needs the exact names), write a
+5. Linux: the deb (and the bridge output) from the `rustdesk:linux-x64` job of the same
+   upstream-mono main pipeline. Windows: on `win-build`, `res/release-ko-build-windows.ps1 -Action
+   start -Commit <commit>` after copying the script to `C:\build\rdk\runs\<commit>\build.ps1` and
+   the bridge files to its `bridge\` (`-Action status` reports the result). Rename the files to the
+   published names `rustdesk-1.5.0-ko.N-x86_64.exe`, `…-x86_64.msi`, `…-x86_64.deb` (the builds
+   name them `rustdesk-1.5.0-x86_64.*`; the Windows updater needs the exact names), write a
    `.sha256` for each, then create GitHub release `1.5.0-ko.N` on that commit with the macOS zips,
    Windows/Linux files, APK, and every `.sha256`; title in Korean naming what changed. The driver
    creates it as a draft and marks it Latest after the checks above (every release is meant to reach

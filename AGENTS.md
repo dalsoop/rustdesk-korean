@@ -29,7 +29,7 @@ rustdesk-korean/
 │   ├── release-ko-build-macos.sh  → both macOS apps of one commit, run by the driver through the build queue
 │   └── release-notes/             → optional per-release notes (`1.5.0-ko.N.md`) the driver publishes
 ├── .github/workflows/
-│   ├── build-desktop-ko.yml       → Windows/Linux x64 builds on push to the default branch
+│   ├── build-desktop-ko.yml       → manual only: the former Windows/Linux x64 release build (the pins reference)
 │   ├── flutter-unit-test.yml      → 5 fork Flutter test files (Korean input, ranode) on push and PRs
 │   └── fork-rust-tests.yml        → fork Rust unit tests (Linux x64) on push and PRs
 ├── docs/

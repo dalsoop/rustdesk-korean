@@ -8,36 +8,42 @@
 flutter/pubspec.yaml. Steps (docs/operations.md "Release ko.N"), each skipped when its result is
 already there and checks out:
 
-  1. Windows/Linux: the "Build desktop (Korean fork, Windows/Linux x64)" run on <commit>; started
-     with workflow_dispatch when there is none (a docs-only push) and the branch head is <commit>;
-     a failed run gets its failed jobs re-run once.
-  2. Android: gujoai/apps/upstream-mono's `rustdesk/` subtree moved to <commit> by an MR put in its
+  1. Android: gujoai/apps/upstream-mono's `rustdesk/` subtree moved to <commit> by an MR put in its
      merge queue; the unsigned APK of the newest `rustdesk:android-arm64` job on a main pipeline whose
      `rustdesk/` equals the commit's tree (checked file by file), signed
      here with res/android-sign-release.sh (pinned certificate, key from Secrets Manager via bwsx).
-  3. macOS: both apps built through the build queue on m5m1 (res/release-ko-build-macos.sh), then
+  2. Linux: the deb of the `rustdesk:linux-x64` job of the same kind of pipeline (gitlab1 CI, an
+     Ubuntu 18.04 container), with the flutter_rust_bridge output of the commit next to it.
+  3. Windows: res/release-ko-build-windows.ps1 on the Windows build VM win-build (over SSH, as a
+     scheduled task there, with that bridge output); the exe and msi copied back here, unsigned.
+  4. macOS: both apps built through the build queue on m5m1 (res/release-ko-build-macos.sh), then
      signed, notarized and zipped with res/osx-sign-notarize.sh (Developer ID, keys from sops).
-  4. Every asset checked (macOS: zip entry, bundle id, version, codesign, team id, "Notarized
+  5. Every asset checked (macOS: zip entry, bundle id, version, codesign, team id, "Notarized
      Developer ID", stapled; APK: versionName/versionCode and the pinned certificate; deb: package
-     version) and a `.sha256` written next to it.
-  5. Release notes: res/release-notes/<tag>.md at <commit> when present (first line `# <title>`),
+     version; Windows: the commit and the MSI ProductVersion win-build reports, and the sha256 of
+     each file on both ends) and a `.sha256` written next to it.
+  6. Release notes: res/release-notes/<tag>.md at <commit> when present (first line `# <title>`),
      else the merged PRs since the previous release; version and file sections are added.
-  6. A draft release on <commit>, the 12 files uploaded, GitHub's sha256 of each compared with ours.
-  7. Checks before Latest: the files above, LaunchServices holds no signing stage copy, and the
+  7. A draft release on <commit>, the 12 files uploaded, GitHub's sha256 of each compared with ours.
+  8. Checks before Latest: the files above, LaunchServices holds no signing stage copy, and the
      process listening on TCP 21118 (this Mac's receiving RustDesk) is the same one as at the
      start. The UI check of the new ranode is skipped on a Mac whose ranode receives connections
      (a second ranode shares its IPC socket, ID and settings); this is recorded in the result.
-  8. Publish and mark Latest, then confirm `releases/latest` and the tag.
+  9. Publish and mark Latest, then confirm `releases/latest` and the tag.
+
+Where each part is built (host-infra .dryforge/spec.md B2): macOS and every signature here on m5m1;
+Linux and Android on gitlab1's CI; Windows on win-build, which holds no key or token. The result's
+`build_hosts` names them for each run.
 
 The signing scripts and the code that is built come from <commit>; this driver and the build script
 come from its own checkout. Secrets stay with the signing scripts (sops, bwsx) and the gh/glab
 wrappers; this driver never reads, prints or passes a key or token.
 
-Modes: --dry-run writes nothing outside the work folder (no draft, MR, dispatch or re-run) and also
-runs for a tag that is already released, comparing with it. --draft-only stops after step 6;
+Modes: --dry-run writes nothing outside the work folder and win-build's build folder (no draft or MR)
+and also runs for a tag that is already released, comparing with it. --draft-only stops after step 7;
 --release-tag puts that draft under another tag name (a throwaway check; delete it afterwards).
 
-Waiting: a step that waits for GitHub Actions, the merge queue or the Android job waits at most
+Waiting: a step that waits for the merge queue, a CI job or the Windows build waits at most
 --wait-seconds (default 10800) and then exits 75; the next run picks up where this one stopped.
 
 Work folder (--work, $RDK_RELEASE_WORK, default ~/work/rdk-release): repo/ (fork clone), build/
@@ -65,11 +71,17 @@ import urllib.parse
 REPO = "dalsoop/rustdesk-korean"
 BRANCH = "feat/sync-upstream-1.5.0"
 FORK_HTTPS = "https://github.com/dalsoop/rustdesk-korean.git"
-CI_WORKFLOW = "build-desktop-ko.yml"
 UM_PROJECT = "gujoai/apps/upstream-mono"
 UM_SSH = "git@gitlab.com:gujoai/apps/upstream-mono.git"
 ANDROID_JOB = "rustdesk:android-arm64"
+LINUX_JOB = "rustdesk:linux-x64"
 BUILD_HOST = "m5m1"
+# The Windows build VM (ssh alias) and its build folder; res/release-ko-build-windows.ps1 runs there.
+WIN_HOST = "win-build"
+WIN_WORK = "C:/build/rdk"
+WIN_SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=30", "-o", "ServerAliveInterval=30", WIN_HOST]
+BRIDGE_FILES = ("bridge_generated.rs", "bridge_generated.io.rs", "generated_bridge.dart",
+                "generated_bridge.freezed.dart", "bridge_generated.h")
 TEAM_ID = "V2Z46YY386"
 # The certificate every fork APK carries (res/android-sign-release.sh pins the same one).
 APK_CERT = "437dfd913ff79a4acb264665f9f03e8d36c978d228f9e7275b0e0eb4539ead7d"
@@ -294,7 +306,8 @@ class Release:
         self.um = os.path.join(self.work, "upstream-mono")
         self.deadline_s = args.wait_seconds
         self.checks = {}
-        self.result = {"status": "failed", "step": "start"}
+        self.build_hosts = {}
+        self.result = {"status": "failed", "step": "start", "build_hosts": self.build_hosts}
 
     # ---------- helpers ----------
 
@@ -408,93 +421,180 @@ class Release:
                 return r
         return None
 
-    # ---------- 1. Windows / Linux from CI ----------
+    # ---------- 2. Linux from upstream-mono's CI (gitlab1) ----------
 
-    def ci_runs(self):
-        d = gh_api("repos/%s/actions/workflows/%s/runs?head_sha=%s&per_page=30" % (REPO, CI_WORKFLOW, self.sha))
-        return (d or {}).get("workflow_runs", [])
+    def bridge_ready(self, folder):
+        return all(os.path.isfile(os.path.join(folder, f)) for f in BRIDGE_FILES)
 
-    def windows_linux(self):
-        self.step("windows-linux")
-        n = self.n
-        names = {
-            "exe": "rustdesk-1.5.0-ko.%d-x86_64.exe" % n,
-            "msi": "rustdesk-1.5.0-ko.%d-x86_64.msi" % n,
-            "deb": "rustdesk-1.5.0-ko.%d-x86_64.deb" % n,
-        }
-        run_file = os.path.join(self.dir, "ci-run")
-        if all(os.path.isfile(os.path.join(self.assets, v)) for v in names.values()) and os.path.isfile(run_file):
-            with open(run_file) as f:
-                self.result["ci_run"] = int(f.read().strip())
-            log("Windows/Linux files already collected from run %s" % self.result["ci_run"])
-            return
-        state_file = os.path.join(self.dir, "ci-actions.json")
+    def linux(self):
+        self.step("linux")
+        name = "rustdesk-1.5.0-ko.%d-x86_64.deb" % self.n
+        deb = os.path.join(self.assets, name)
+        bridge = os.path.join(self.dir, "bridge")
+        job_file = os.path.join(self.dir, "linux-job")
+        if os.path.isfile(deb) and os.path.isfile(job_file) and self.bridge_ready(bridge):
+            try:
+                self.verify_deb()
+                with open(job_file) as f:
+                    jid = int(f.read().strip())
+                self.result["linux_job"] = jid
+                self.build_hosts["linux"] = "gitlab1 CI, upstream-mono job %s" % jid
+                log("Linux deb and bridge already collected from job %s" % jid)
+                return
+            except (Failed, ValueError) as e:
+                log("existing %s fails its check (%s); collecting again" % (name, e))
+                os.remove(deb)
+        tree = self.um_tree()
+        job = self.wait("%s on an upstream-mono main pipeline with rustdesk/ %s" % (LINUX_JOB, tree[:8]),
+                        lambda: self.um_job(LINUX_JOB, tree))
+        d = os.path.join(self.dir, "linux")
+        shutil.rmtree(d, ignore_errors=True)
+        x = os.path.join(d, "x")
+        os.makedirs(x)
+        gl_api("%s/jobs/%d/artifacts" % (proj(UM_PROJECT), job["id"]), out_file=os.path.join(d, "artifacts.zip"))
+        run(["/usr/bin/ditto", "-x", "-k", os.path.join(d, "artifacts.zip"), x])
+        debs = sorted(f for f in os.listdir(os.path.join(x, "deb")) if f.endswith(".deb")) \
+            if os.path.isdir(os.path.join(x, "deb")) else []
+        if debs != ["rustdesk-1.5.0-x86_64.deb"]:
+            raise Failed("job %s artifact: expected deb/rustdesk-1.5.0-x86_64.deb, found %s" % (job["id"], debs))
+        if not self.bridge_ready(os.path.join(x, "bridge")):
+            raise Failed("job %s artifact has no complete bridge/ (%s)" % (job["id"], ", ".join(BRIDGE_FILES)))
+        shutil.copyfile(os.path.join(x, "deb", debs[0]), deb)
+        shutil.rmtree(bridge, ignore_errors=True)
+        os.makedirs(bridge)
+        for f in BRIDGE_FILES:
+            shutil.copyfile(os.path.join(x, "bridge", f), os.path.join(bridge, f))
+        self.verify_deb()
+        with open(job_file, "w") as f:
+            f.write("%d\n" % job["id"])
+        self.result["linux_job"] = job["id"]
+        self.build_hosts["linux"] = "gitlab1 CI, upstream-mono job %s" % job["id"]
+        log("collected %s and the bridge from job %s" % (name, job["id"]))
+
+    # ---------- 3. Windows on win-build ----------
+
+    def win(self, args, check=True, timeout=300):
+        return run(WIN_SSH + args, check=check, timeout=timeout)
+
+    def win_status(self):
+        p = self.win(["pwsh", "-NoProfile", "-File", WIN_WORK + "/release-ko-build-windows.ps1", "-Action", "status",
+                      "-Commit", self.sha])
+        lines = [l for l in p.stdout.splitlines() if l.startswith("{")]
+        if not lines:
+            raise Failed("win-build status answered no JSON")
+        return json.loads(lines[-1])
+
+    def win_names(self):
+        return {"exe": ("rustdesk-1.5.0-x86_64.exe", "rustdesk-1.5.0-ko.%d-x86_64.exe" % self.n),
+                "msi": ("rustdesk-1.5.0-x86_64.msi", "rustdesk-1.5.0-ko.%d-x86_64.msi" % self.n)}
+
+    def verify_windows(self):
+        """The two Windows files are the ones win-build built from this commit (its build-info.json and the sha256
+        it reported for each file)."""
         try:
-            with open(state_file) as f:
-                acted = json.load(f)
+            with open(os.path.join(self.dir, "windows-build.json")) as f:
+                rec = json.load(f)
         except (OSError, ValueError):
-            acted = {}
+            raise Failed("no record of the Windows build (windows-build.json)")
+        info = rec.get("info") or {}
+        if info.get("commit") != self.sha:
+            raise Failed("the Windows files were built from %s, not %s" % (info.get("commit"), self.short))
+        want = "1.5.0.%d" % self.build_number
+        if info.get("msi_product_version") != want:
+            raise Failed("MSI ProductVersion %s, expected %s" % (info.get("msi_product_version"), want))
+        for key, (_, name) in self.win_names().items():
+            path = os.path.join(self.assets, name)
+            if not os.path.isfile(path) or sha256(path) != (rec.get("sha256") or {}).get(name):
+                raise Failed("%s is missing or not the file win-build reported" % name)
+            if os.path.getsize(path) < 1 << 20:
+                raise Failed("%s is suspiciously small" % name)
+        exe, msi = self.win_names()["exe"][1], self.win_names()["msi"][1]
+        self.checks[exe] = "built on %s from %s, rustdesk.exe FileVersion %s, unsigned" % (
+            WIN_HOST, self.short, info.get("exe_file_version"))
+        self.checks[msi] = "built on %s from %s, ProductVersion %s, unsigned" % (WIN_HOST, self.short, want)
+        self.build_hosts["windows"] = "%s (VM %s), outside the build queue" % (WIN_HOST, info.get("host"))
+
+    def windows(self):
+        self.step("windows")
+        names = self.win_names()
+        if all(os.path.isfile(os.path.join(self.assets, n)) for _, n in names.values()):
+            try:
+                self.verify_windows()
+                log("Windows files already collected")
+                return
+            except Failed as e:
+                log("existing Windows files fail their check (%s); building again" % e)
+                for _, n in names.values():
+                    os.remove(os.path.join(self.assets, n))
+        bridge = os.path.join(self.dir, "bridge")
+        if not self.bridge_ready(bridge):
+            raise Failed("no bridge output of %s (the linux step collects it from %s)" % (self.short, LINUX_JOB))
+        run_dir = "%s/runs/%s" % (WIN_WORK, self.sha)
+        script = os.path.join(TOOLS, "res", "release-ko-build-windows.ps1")
+        self.win(["New-Item -ItemType Directory -Force -Path '%s/bridge' | Out-Null" % run_dir])
+        # This copy answers `status`; the build runs its own copy in the run folder.
+        run(["scp", "-q", "-o", "BatchMode=yes", script, "%s:%s/release-ko-build-windows.ps1" % (WIN_HOST, WIN_WORK)])
+        st = self.win_status()
+        started = False
+        if st["state"] in ("none", "failed"):
+            if st["state"] == "failed":
+                self.win_log()
+                log("the last Windows build of %s on %s failed (exit %s); starting it again"
+                    % (self.short, WIN_HOST, st.get("exit")))
+            run(["scp", "-q", "-o", "BatchMode=yes", script, "%s:%s/build.ps1" % (WIN_HOST, run_dir)])
+            run(["scp", "-q", "-o", "BatchMode=yes"] + [os.path.join(bridge, f) for f in BRIDGE_FILES]
+                + ["%s:%s/bridge/" % (WIN_HOST, run_dir)])
+            p = self.win(["pwsh", "-NoProfile", "-File", WIN_WORK + "/release-ko-build-windows.ps1", "-Action", "start",
+                          "-Commit", self.sha], check=False)
+            if p.returncode == 3:
+                raise Pending("%s is building another commit (%s)" % (WIN_HOST, p.stdout.strip()))
+            if p.returncode != 0:
+                raise Failed("starting the Windows build on %s: exit %d\n%s" % (WIN_HOST, p.returncode,
+                                                                               tail(p.stdout + p.stderr, 6)))
+            started = True
+            log("started the Windows build of %s on %s" % (self.short, WIN_HOST))
+        elif st["state"] == "running":
+            log("the Windows build of %s is running on %s" % (self.short, WIN_HOST))
 
         def probe():
-            runs = self.ci_runs()
-            ok = [r for r in runs if r["status"] == "completed" and r["conclusion"] == "success"]
-            if ok:
-                return ok[0]
-            if any(r["status"] != "completed" for r in runs):
+            s = self.win_status()
+            if s["state"] == "running":
                 return None
-            if self.args.dry_run:
-                raise Failed("no successful \"Build desktop\" run on %s (dry run: nothing started)" % self.short)
-            failed = [r for r in runs if r["status"] == "completed"]
-            if failed and not acted.get("rerun"):
-                rid = failed[0]["id"]
-                run(["gh", "run", "rerun", str(rid), "--failed", "-R", REPO])
-                acted["rerun"] = rid
-                log("re-running the failed jobs of run %s" % rid)
-                return None
-            if failed:
-                raise Failed("\"Build desktop\" failed on %s (run %s, already re-run once)"
-                             % (self.short, failed[0]["id"]))
-            if acted.get("dispatched") and time.time() - acted["dispatched"] < 600:
-                return None
-            head = git(self.repo, "ls-remote", "origin", "refs/heads/" + BRANCH).split()[0]
-            if head != self.sha:
-                raise Failed("no \"Build desktop\" run on %s and %s has moved on to %s; workflow_dispatch would "
-                             "build another commit" % (self.short, BRANCH, head[:8]))
-            run(["gh", "workflow", "run", CI_WORKFLOW, "-R", REPO, "--ref", BRANCH])
-            acted["dispatched"] = time.time()
-            log("started \"Build desktop\" with workflow_dispatch on %s" % BRANCH)
-            return None
+            if s["state"] == "none":
+                raise Failed("the Windows build on %s stopped without a result" % WIN_HOST)
+            return s
 
-        def probe_saving():
-            try:
-                return probe()
-            finally:
-                with open(state_file, "w") as f:
-                    json.dump(acted, f)
+        st = self.wait("the Windows build of %s on %s" % (self.short, WIN_HOST), probe, interval=60) \
+            if st["state"] != "done" or started else st
+        self.win_log()
+        if st["state"] != "done":
+            raise Failed("the Windows build of %s on %s failed (exit %s); log: %s"
+                         % (self.short, WIN_HOST, st.get("exit"), os.path.join(self.logs, "windows-build.log")))
+        d = os.path.join(self.dir, "windows")
+        shutil.rmtree(d, ignore_errors=True)
+        os.makedirs(d)
+        reported = {f["name"]: f["sha256"] for f in st.get("files") or []}
+        for src in [s for s, _ in names.values()] + ["build-info.json"]:
+            run(["scp", "-q", "-o", "BatchMode=yes", "%s:%s/out/%s" % (WIN_HOST, run_dir, src), os.path.join(d, src)],
+                timeout=1800)
+            if sha256(os.path.join(d, src)) != reported.get(src):
+                raise Failed("%s copied from %s does not match the sha256 it reported" % (src, WIN_HOST))
+        with open(os.path.join(d, "build-info.json"), encoding="utf-8-sig") as f:
+            info = json.load(f)
+        rec = {"info": info, "sha256": {}}
+        for src, name in names.values():
+            shutil.copyfile(os.path.join(d, src), os.path.join(self.assets, name))
+            rec["sha256"][name] = reported[src]
+        with open(os.path.join(self.dir, "windows-build.json"), "w") as f:
+            json.dump(rec, f, indent=1)
+        self.verify_windows()
+        log("collected %s from %s" % (", ".join(n for _, n in names.values()), WIN_HOST))
 
-        r = self.wait("\"Build desktop\" on %s" % self.short, probe_saving)
-        if r["head_sha"] != self.sha:
-            raise Failed("run %s is on %s" % (r["id"], r["head_sha"]))
-        ci = os.path.join(self.dir, "ci")
-        shutil.rmtree(ci, ignore_errors=True)
-        os.makedirs(ci)
-        run(["gh", "run", "download", str(r["id"]), "-R", REPO, "-D", ci, "-n", "rustdesk-1.5.0-ko-windows-x86_64",
-             "-n", "rustdesk-1.5.0-x86_64.deb"], timeout=3600)
-        pairs = [
-            (os.path.join(ci, "rustdesk-1.5.0-ko-windows-x86_64", "rustdesk-1.5.0-x86_64.exe"), names["exe"]),
-            (os.path.join(ci, "rustdesk-1.5.0-ko-windows-x86_64", "rustdesk-1.5.0-x86_64.msi"), names["msi"]),
-            (os.path.join(ci, "rustdesk-1.5.0-x86_64.deb", "rustdesk-1.5.0-x86_64.deb"), names["deb"]),
-        ]
-        for src, name in pairs:
-            if not os.path.isfile(src):
-                raise Failed("run %s has no %s" % (r["id"], os.path.relpath(src, ci)))
-            shutil.copyfile(src, os.path.join(self.assets, name))
-        with open(run_file, "w") as f:
-            f.write("%s\n" % r["id"])
-        self.result["ci_run"] = r["id"]
-        log("collected exe, msi, deb from run %s" % r["id"])
+    def win_log(self):
+        run(["scp", "-q", "-o", "BatchMode=yes", "%s:%s/runs/%s/build.log" % (WIN_HOST, WIN_WORK, self.sha),
+             os.path.join(self.logs, "windows-build.log")], check=False, timeout=600)
 
-    # ---------- 2. Android ----------
+    # ---------- 1. Android ----------
 
     def um_checkout(self):
         if not os.path.isdir(os.path.join(self.um, ".git")):
@@ -522,22 +622,9 @@ class Release:
             except Failed as e:
                 log("existing %s fails its check (%s); signing again" % (apk_name, e))
                 os.remove(apk)
-        self.um_checkout()
-        squash, split = self.um_split()
-        if split != self.sha:
-            self.subtree_mr(split)  # raises Pending or Failed
-            squash, split = self.um_split()
-            if split != self.sha:
-                raise Pending("upstream-mono MR for %s" % self.short)
-        # The main commit that brought the squash in: the oldest first-parent commit of main descending from it.
-        desc = set(git(self.um, "rev-list", "--ancestry-path", "%s..origin/main" % squash).split())
-        chain = [c for c in git(self.um, "rev-list", "--first-parent", "%s..origin/main" % squash).split() if c in desc]
-        merged = chain[-1] if chain else squash
-        self.check_subtree(merged)
-        tree = git(self.um, "rev-parse", merged + ":rustdesk")
-        log("upstream-mono has rustdesk/ at %s since %s (tree %s)" % (self.short, merged[:8], tree[:8]))
+        tree = self.um_tree()
         job = self.wait("%s on an upstream-mono main pipeline with rustdesk/ %s" % (ANDROID_JOB, tree[:8]),
-                        lambda: self.android_job(tree))
+                        lambda: self.um_job(ANDROID_JOB, tree))
         d = os.path.join(self.dir, "apk")
         shutil.rmtree(d, ignore_errors=True)
         os.makedirs(os.path.join(d, "x"))
@@ -548,6 +635,7 @@ class Release:
         if len(found) != 1:
             raise Failed("job %s artifact: expected one ko.%d unsigned APK, found %s" % (job["id"], self.n, found))
         self.result["android_job"] = job["id"]
+        self.build_hosts["android"] = "gitlab1 CI, upstream-mono job %s (signed on m5m1)" % job["id"]
         self.checkout_build()
         run(["bash", os.path.join(self.build_dir, "res", "android-sign-release.sh"),
              os.path.join(d, "x", "apk", found[0]), apk], out=os.path.join(self.logs, "android-sign.log"))
@@ -574,8 +662,29 @@ class Release:
             raise Failed("upstream-mono %s rustdesk/ differs from %s outside hbb_common: %s"
                          % (rev[:8], self.short, extra[:5]))
 
-    def android_job(self, tree):
-        """The newest successful Android job, with its artifact, on a main pipeline whose rustdesk/ is `tree`."""
+    def um_tree(self):
+        """The rustdesk/ tree of upstream-mono main once it holds this commit (asks for the sync MR otherwise)."""
+        if getattr(self, "_um_tree", None):
+            return self._um_tree
+        self.um_checkout()
+        squash, split = self.um_split()
+        if split != self.sha:
+            self.subtree_mr(split)  # raises Pending or Failed
+            squash, split = self.um_split()
+            if split != self.sha:
+                raise Pending("upstream-mono MR for %s" % self.short)
+        # The main commit that brought the squash in: the oldest first-parent commit of main descending from it.
+        desc = set(git(self.um, "rev-list", "--ancestry-path", "%s..origin/main" % squash).split())
+        chain = [c for c in git(self.um, "rev-list", "--first-parent", "%s..origin/main" % squash).split() if c in desc]
+        merged = chain[-1] if chain else squash
+        self.check_subtree(merged)
+        tree = git(self.um, "rev-parse", merged + ":rustdesk")
+        log("upstream-mono has rustdesk/ at %s since %s (tree %s)" % (self.short, merged[:8], tree[:8]))
+        self._um_tree = tree
+        return tree
+
+    def um_job(self, name, tree):
+        """The newest successful job `name`, with its artifact, on a main pipeline whose rustdesk/ is `tree`."""
         pipes = gl_api("%s/pipelines?ref=main&per_page=30&order_by=id&sort=desc" % proj(UM_PROJECT)) or []
         waiting = False
         seen = []
@@ -584,7 +693,7 @@ class Release:
             if t.returncode != 0 or t.stdout.strip() != tree:
                 continue
             for j in gl_api("%s/pipelines/%d/jobs?per_page=100" % (proj(UM_PROJECT), p["id"])) or []:
-                if j["name"] != ANDROID_JOB:
+                if j["name"] != name:
                     continue
                 seen.append("%s %s" % (j["id"], j["status"]))
                 if j["status"] in ("created", "pending", "running", "waiting_for_resource", "preparing", "scheduled"):
@@ -597,7 +706,7 @@ class Release:
         if waiting:
             return None
         # A merge's main pipeline appears a little after the merge: allow 15 minutes (kept across runs) before failing.
-        since_file = os.path.join(self.dir, "android-no-job-since")
+        since_file = os.path.join(self.dir, "%s-no-job-since" % name.replace(":", "-"))
         if not os.path.isfile(since_file):
             with open(since_file, "w") as f:
                 f.write("%d\n" % time.time())
@@ -609,7 +718,7 @@ class Release:
         os.remove(since_file)
         raise Failed("no usable %s job on an upstream-mono main pipeline with rustdesk/ %s (seen: %s); run a main "
                      "pipeline of upstream-mono (Build → Pipelines → Run pipeline, branch main) and run this again"
-                     % (ANDROID_JOB, tree[:8], ", ".join(seen) or "none"))
+                     % (name, tree[:8], ", ".join(seen) or "none"))
 
     def close_superseded_mrs(self, keep_branch):
         """Open sync MRs this driver opened for another release: closed, so a stale sync never merges later."""
@@ -697,11 +806,12 @@ class Release:
             "- `rustdesk/` = fork %s tree via `git subtree merge --squash` (only `.gitmodules` and the "
             "`libs/hbb_common` folder differ, as before)\n- `rustdesk/libs/hbb_common`: unchanged from main\n\n"
             "## Next\n\nThe fork's release driver (`res/release-ko.py` on m5m1) signs the unsigned APK of the "
-            "`%s` job on main and uploads it to the GitHub release `%s`.\n\n"
+            "`%s` job on main, takes the deb of `%s` and uploads them to the GitHub release `%s`.\n\n"
             "되돌릴 수 있나: 예 — subtree squash 커밋 하나라 revert 로 이전 트리로 돌아간다\n"
             "영향 범위: rustdesk\n\n자동 생성: dalsoop/rustdesk-korean res/release-ko.py (m5m1)\n"
             % (BRANCH, self.short, self.tag, self.build_number,
-               "".join("\n- dalsoop/rustdesk-korean#%s: %s" % p for p in prs), self.short, ANDROID_JOB, self.tag))
+               "".join("\n- dalsoop/rustdesk-korean#%s: %s" % p for p in prs), self.short, ANDROID_JOB, LINUX_JOB,
+               self.tag))
         if mr:
             mr = gl_api("%s/merge_requests/%d" % (proj(UM_PROJECT), mr["iid"]), method="PUT",
                         fields={"description": desc, "title": title})
@@ -755,7 +865,7 @@ class Release:
         self.checks["apk"] = "%s %s versionCode %s, certificate %s…%s" % (m.group(1), want_name, want_code,
                                                                            APK_CERT[:8], APK_CERT[-8:])
 
-    # ---------- 3. macOS ----------
+    # ---------- 4. macOS ----------
 
     def checkout_build(self):
         """The build checkout at the release commit, reset (its Rust target/ kept for the next release)."""
@@ -771,6 +881,8 @@ class Release:
 
     def macos(self):
         self.step("macos")
+        self.build_hosts["macos"] = "%s (build queue, --host %s); signed and notarized on m5m1" % (BUILD_HOST,
+                                                                                                    BUILD_HOST)
         zips = [os.path.join(self.assets, z.format(n=self.n)) for _, _, _, z in MAC_APPS]
         if all(os.path.isfile(z) for z in zips):
             try:
@@ -854,7 +966,7 @@ class Release:
                     run([LSREGISTER, "-u", os.path.realpath(a)], check=False)
             shutil.rmtree(v, ignore_errors=True)
 
-    # ---------- 4. checks and sha256 ----------
+    # ---------- 5. checks and sha256 ----------
 
     def verify_deb(self):
         name = "rustdesk-1.5.0-ko.%d-x86_64.deb" % self.n
@@ -879,10 +991,7 @@ class Release:
     def checksums(self):
         self.step("checksums")
         self.verify_deb()
-        for name in ("rustdesk-1.5.0-ko.%d-x86_64.exe" % self.n, "rustdesk-1.5.0-ko.%d-x86_64.msi" % self.n):
-            if os.path.getsize(os.path.join(self.assets, name)) < 1 << 20:
-                raise Failed("%s is suspiciously small" % name)
-            self.checks[name] = "from CI run %s" % self.result.get("ci_run", "(collected earlier)")
+        self.verify_windows()
         self.digests = {}
         for name in self.asset_names():
             path = os.path.join(self.assets, name)
@@ -898,7 +1007,7 @@ class Release:
         for k, v in sorted(self.result["assets"].items()):
             log("  %s  %s" % (v, k))
 
-    # ---------- 5. notes ----------
+    # ---------- 6. notes ----------
 
     def notes(self):
         self.step("notes")
@@ -953,7 +1062,7 @@ class Release:
             f.write("\n".join(body) + "\n")
         log("title: %s; notes: %s" % (title, self.notes_file))
 
-    # ---------- 6–8. GitHub release ----------
+    # ---------- 7–9. GitHub release ----------
 
     def upload(self):
         self.step("draft")
@@ -1113,8 +1222,9 @@ class Release:
                 self.checks["published"] = "Latest, tag on %s, %d files" % (self.short, 2 * len(self.asset_names()))
             self.result.update({"status": "exists", "release_url": rel["html_url"]})
             return 0
-        self.windows_linux()
         self.android()
+        self.linux()
+        self.windows()
         self.macos()
         self.checksums()
         self.notes()
