@@ -431,19 +431,26 @@ class Release:
         name = "rustdesk-1.5.0-ko.%d-x86_64.deb" % self.n
         deb = os.path.join(self.assets, name)
         bridge = os.path.join(self.dir, "bridge")
-        job_file = os.path.join(self.dir, "linux-job")
-        if os.path.isfile(deb) and os.path.isfile(job_file) and self.bridge_ready(bridge):
-            try:
-                self.verify_deb()
-                with open(job_file) as f:
-                    jid = int(f.read().strip())
-                self.result["linux_job"] = jid
-                self.build_hosts["linux"] = "gitlab1 CI, upstream-mono job %s" % jid
-                log("Linux deb and bridge already collected from job %s" % jid)
-                return
-            except (Failed, ValueError) as e:
-                log("existing %s fails its check (%s); collecting again" % (name, e))
-                os.remove(deb)
+        # Written last, after the deb and the bridge are in place: names the job and the sha256 of every file taken.
+        record = os.path.join(self.dir, "linux-job.json")
+        try:
+            with open(record) as f:
+                rec = json.load(f)
+            if sha256(deb) != rec["deb"] or any(sha256(os.path.join(bridge, f)) != rec["bridge"][f]
+                                                for f in BRIDGE_FILES):
+                raise Failed("the deb or the bridge differ from what job %s gave" % rec.get("job"))
+            self.verify_deb()
+            self.result["linux_job"] = rec["job"]
+            self.build_hosts["linux"] = "gitlab1 CI, upstream-mono job %s" % rec["job"]
+            log("Linux deb and bridge already collected from job %s" % rec["job"])
+            return
+        except FileNotFoundError:
+            pass
+        except (Failed, OSError, ValueError, KeyError, TypeError) as e:
+            log("the collected Linux files fail their check (%s); collecting again" % e)
+        for path in (record, deb):
+            if os.path.exists(path):
+                os.remove(path)
         tree = self.um_tree()
         job = self.wait("%s on an upstream-mono main pipeline with rustdesk/ %s" % (LINUX_JOB, tree[:8]),
                         lambda: self.um_job(LINUX_JOB, tree))
@@ -459,14 +466,19 @@ class Release:
             raise Failed("job %s artifact: expected deb/rustdesk-1.5.0-x86_64.deb, found %s" % (job["id"], debs))
         if not self.bridge_ready(os.path.join(x, "bridge")):
             raise Failed("job %s artifact has no complete bridge/ (%s)" % (job["id"], ", ".join(BRIDGE_FILES)))
-        shutil.copyfile(os.path.join(x, "deb", debs[0]), deb)
-        shutil.rmtree(bridge, ignore_errors=True)
-        os.makedirs(bridge)
+        tmp = bridge + ".tmp"
+        shutil.rmtree(tmp, ignore_errors=True)
+        os.makedirs(tmp)
         for f in BRIDGE_FILES:
-            shutil.copyfile(os.path.join(x, "bridge", f), os.path.join(bridge, f))
+            shutil.copyfile(os.path.join(x, "bridge", f), os.path.join(tmp, f))
+        shutil.rmtree(bridge, ignore_errors=True)
+        os.rename(tmp, bridge)
+        shutil.copyfile(os.path.join(x, "deb", debs[0]), deb)
         self.verify_deb()
-        with open(job_file, "w") as f:
-            f.write("%d\n" % job["id"])
+        with open(record + ".tmp", "w") as f:
+            json.dump({"job": job["id"], "deb": sha256(deb),
+                       "bridge": {f: sha256(os.path.join(bridge, f)) for f in BRIDGE_FILES}}, f, indent=1)
+        os.replace(record + ".tmp", record)
         self.result["linux_job"] = job["id"]
         self.build_hosts["linux"] = "gitlab1 CI, upstream-mono job %s" % job["id"]
         log("collected %s and the bridge from job %s" % (name, job["id"]))
@@ -488,6 +500,14 @@ class Release:
         return {"exe": ("rustdesk-1.5.0-x86_64.exe", "rustdesk-1.5.0-ko.%d-x86_64.exe" % self.n),
                 "msi": ("rustdesk-1.5.0-x86_64.msi", "rustdesk-1.5.0-ko.%d-x86_64.msi" % self.n)}
 
+    def win_info_problem(self, info):
+        """Why win-build's build-info.json does not belong to this release, or None."""
+        if info.get("commit") != self.sha:
+            return "built from %s, not %s" % (info.get("commit"), self.short)
+        if info.get("msi_product_version") != "1.5.0.%d" % self.build_number:
+            return "MSI ProductVersion %s, expected 1.5.0.%d" % (info.get("msi_product_version"), self.build_number)
+        return None
+
     def verify_windows(self):
         """The two Windows files are the ones win-build built from this commit (its build-info.json and the sha256
         it reported for each file)."""
@@ -497,11 +517,9 @@ class Release:
         except (OSError, ValueError):
             raise Failed("no record of the Windows build (windows-build.json)")
         info = rec.get("info") or {}
-        if info.get("commit") != self.sha:
-            raise Failed("the Windows files were built from %s, not %s" % (info.get("commit"), self.short))
-        want = "1.5.0.%d" % self.build_number
-        if info.get("msi_product_version") != want:
-            raise Failed("MSI ProductVersion %s, expected %s" % (info.get("msi_product_version"), want))
+        problem = self.win_info_problem(info)
+        if problem:
+            raise Failed("the Windows files: %s" % problem)
         for key, (_, name) in self.win_names().items():
             path = os.path.join(self.assets, name)
             if not os.path.isfile(path) or sha256(path) != (rec.get("sha256") or {}).get(name):
@@ -511,8 +529,57 @@ class Release:
         exe, msi = self.win_names()["exe"][1], self.win_names()["msi"][1]
         self.checks[exe] = "built on %s from %s, rustdesk.exe FileVersion %s, unsigned" % (
             WIN_HOST, self.short, info.get("exe_file_version"))
-        self.checks[msi] = "built on %s from %s, ProductVersion %s, unsigned" % (WIN_HOST, self.short, want)
+        self.checks[msi] = "built on %s from %s, ProductVersion %s, unsigned" % (WIN_HOST, self.short,
+                                                                               info.get("msi_product_version"))
         self.build_hosts["windows"] = "%s (VM %s), outside the build queue" % (WIN_HOST, info.get("host"))
+
+    def win_start(self, run_dir, bridge, script):
+        run(["scp", "-q", "-o", "BatchMode=yes", script, "%s:%s/build.ps1" % (WIN_HOST, run_dir)])
+        run(["scp", "-q", "-o", "BatchMode=yes"] + [os.path.join(bridge, f) for f in BRIDGE_FILES]
+            + ["%s:%s/bridge/" % (WIN_HOST, run_dir)])
+        p = self.win(["pwsh", "-NoProfile", "-File", WIN_WORK + "/release-ko-build-windows.ps1", "-Action", "start",
+                      "-Commit", self.sha], check=False)
+        if p.returncode == 3:
+            raise Pending("%s is building another commit (%s)" % (WIN_HOST, p.stdout.strip()))
+        if p.returncode != 0:
+            raise Failed("starting the Windows build on %s: exit %d\n%s" % (WIN_HOST, p.returncode,
+                                                                           tail(p.stdout + p.stderr, 6)))
+        log("started the Windows build of %s on %s" % (self.short, WIN_HOST))
+
+    def win_collect(self, st, run_dir):
+        """Copies a finished build here. Returns why the build itself is unusable (it must be built again), or None.
+        A failed copy raises Failed instead: the next attempt copies the same build again."""
+        names = self.win_names()
+        reported = {f.get("name"): f.get("sha256") for f in st.get("files") or []}
+        missing = [s for s in [s for s, _ in names.values()] + ["build-info.json"] if not reported.get(s)]
+        if missing:
+            return "its output lacks %s" % ", ".join(missing)
+        d = os.path.join(self.dir, "windows")
+        shutil.rmtree(d, ignore_errors=True)
+        os.makedirs(d)
+        for src in [s for s, _ in names.values()] + ["build-info.json"]:
+            run(["scp", "-q", "-o", "BatchMode=yes", "%s:%s/out/%s" % (WIN_HOST, run_dir, src), os.path.join(d, src)],
+                timeout=1800)
+            if sha256(os.path.join(d, src)) != reported[src]:
+                return "%s does not match the sha256 win-build reported" % src
+        try:
+            with open(os.path.join(d, "build-info.json"), encoding="utf-8-sig") as f:
+                info = json.load(f)
+        except ValueError:
+            return "its build-info.json is unreadable"
+        problem = self.win_info_problem(info)
+        if problem:
+            return problem
+        for src, _ in names.values():
+            if os.path.getsize(os.path.join(d, src)) < 1 << 20:
+                return "%s is suspiciously small" % src
+        rec = {"info": info, "sha256": {}}
+        for src, name in names.values():
+            shutil.copyfile(os.path.join(d, src), os.path.join(self.assets, name))
+            rec["sha256"][name] = reported[src]
+        with open(os.path.join(self.dir, "windows-build.json"), "w") as f:
+            json.dump(rec, f, indent=1)
+        return None
 
     def windows(self):
         self.step("windows")
@@ -523,9 +590,10 @@ class Release:
                 log("Windows files already collected")
                 return
             except Failed as e:
-                log("existing Windows files fail their check (%s); building again" % e)
-                for _, n in names.values():
-                    os.remove(os.path.join(self.assets, n))
+                log("existing Windows files fail their check (%s); collecting them again" % e)
+        for _, n in names.values():
+            if os.path.exists(os.path.join(self.assets, n)):
+                os.remove(os.path.join(self.assets, n))
         bridge = os.path.join(self.dir, "bridge")
         if not self.bridge_ready(bridge):
             raise Failed("no bridge output of %s (the linux step collects it from %s)" % (self.short, LINUX_JOB))
@@ -534,25 +602,26 @@ class Release:
         self.win(["New-Item -ItemType Directory -Force -Path '%s/bridge' | Out-Null" % run_dir])
         # This copy answers `status`; the build runs its own copy in the run folder.
         run(["scp", "-q", "-o", "BatchMode=yes", script, "%s:%s/release-ko-build-windows.ps1" % (WIN_HOST, WIN_WORK)])
+        # A finished build this driver refused (wrong commit or version, missing or changed files): its reported
+        # files, so a later run builds again instead of taking it.
+        rejected_file = os.path.join(self.dir, "windows-rejected.json")
+        try:
+            with open(rejected_file) as f:
+                rejected = json.load(f)
+        except (OSError, ValueError):
+            rejected = None
         st = self.win_status()
-        started = False
-        if st["state"] in ("none", "failed"):
+        started_here = False
+        if st["state"] in ("none", "failed") or (st["state"] == "done" and st.get("files") == rejected):
             if st["state"] == "failed":
                 self.win_log()
                 log("the last Windows build of %s on %s failed (exit %s); starting it again"
                     % (self.short, WIN_HOST, st.get("exit")))
-            run(["scp", "-q", "-o", "BatchMode=yes", script, "%s:%s/build.ps1" % (WIN_HOST, run_dir)])
-            run(["scp", "-q", "-o", "BatchMode=yes"] + [os.path.join(bridge, f) for f in BRIDGE_FILES]
-                + ["%s:%s/bridge/" % (WIN_HOST, run_dir)])
-            p = self.win(["pwsh", "-NoProfile", "-File", WIN_WORK + "/release-ko-build-windows.ps1", "-Action", "start",
-                          "-Commit", self.sha], check=False)
-            if p.returncode == 3:
-                raise Pending("%s is building another commit (%s)" % (WIN_HOST, p.stdout.strip()))
-            if p.returncode != 0:
-                raise Failed("starting the Windows build on %s: exit %d\n%s" % (WIN_HOST, p.returncode,
-                                                                               tail(p.stdout + p.stderr, 6)))
-            started = True
-            log("started the Windows build of %s on %s" % (self.short, WIN_HOST))
+            elif st["state"] == "done":
+                log("the finished Windows build of %s on %s was refused before; building again" % (self.short,
+                                                                                                 WIN_HOST))
+            self.win_start(run_dir, bridge, script)
+            started_here = True
         elif st["state"] == "running":
             log("the Windows build of %s is running on %s" % (self.short, WIN_HOST))
 
@@ -564,29 +633,26 @@ class Release:
                 raise Failed("the Windows build on %s stopped without a result" % WIN_HOST)
             return s
 
-        st = self.wait("the Windows build of %s on %s" % (self.short, WIN_HOST), probe, interval=60) \
-            if st["state"] != "done" or started else st
-        self.win_log()
-        if st["state"] != "done":
-            raise Failed("the Windows build of %s on %s failed (exit %s); log: %s"
-                         % (self.short, WIN_HOST, st.get("exit"), os.path.join(self.logs, "windows-build.log")))
-        d = os.path.join(self.dir, "windows")
-        shutil.rmtree(d, ignore_errors=True)
-        os.makedirs(d)
-        reported = {f["name"]: f["sha256"] for f in st.get("files") or []}
-        for src in [s for s, _ in names.values()] + ["build-info.json"]:
-            run(["scp", "-q", "-o", "BatchMode=yes", "%s:%s/out/%s" % (WIN_HOST, run_dir, src), os.path.join(d, src)],
-                timeout=1800)
-            if sha256(os.path.join(d, src)) != reported.get(src):
-                raise Failed("%s copied from %s does not match the sha256 it reported" % (src, WIN_HOST))
-        with open(os.path.join(d, "build-info.json"), encoding="utf-8-sig") as f:
-            info = json.load(f)
-        rec = {"info": info, "sha256": {}}
-        for src, name in names.values():
-            shutil.copyfile(os.path.join(d, src), os.path.join(self.assets, name))
-            rec["sha256"][name] = reported[src]
-        with open(os.path.join(self.dir, "windows-build.json"), "w") as f:
-            json.dump(rec, f, indent=1)
+        while True:
+            if st["state"] != "done" or started_here:
+                st = self.wait("the Windows build of %s on %s" % (self.short, WIN_HOST), probe, interval=60)
+            self.win_log()
+            if st["state"] != "done":
+                raise Failed("the Windows build of %s on %s failed (exit %s); log: %s"
+                             % (self.short, WIN_HOST, st.get("exit"), os.path.join(self.logs, "windows-build.log")))
+            problem = self.win_collect(st, run_dir)
+            if not problem:
+                break
+            with open(rejected_file, "w") as f:
+                json.dump(st.get("files"), f)
+            if started_here:
+                raise Failed("the Windows build of %s that this run started is unusable: %s" % (self.short, problem))
+            log("the finished Windows build of %s on %s is unusable (%s); building again" % (self.short, WIN_HOST,
+                                                                                           problem))
+            self.win_start(run_dir, bridge, script)
+            started_here = True
+        if os.path.exists(rejected_file):
+            os.remove(rejected_file)
         self.verify_windows()
         log("collected %s from %s" % (", ".join(n for _, n in names.values()), WIN_HOST))
 
@@ -617,6 +683,13 @@ class Release:
         if os.path.isfile(apk):
             try:
                 self.verify_apk(apk)
+                try:
+                    with open(os.path.join(self.dir, "android-job")) as f:
+                        jid = int(f.read().strip())
+                    self.result["android_job"] = jid
+                    self.build_hosts["android"] = "gitlab1 CI, upstream-mono job %s (signed on m5m1)" % jid
+                except (OSError, ValueError):
+                    pass
                 log("%s already signed and checked" % apk_name)
                 return
             except Failed as e:
@@ -640,6 +713,8 @@ class Release:
         run(["bash", os.path.join(self.build_dir, "res", "android-sign-release.sh"),
              os.path.join(d, "x", "apk", found[0]), apk], out=os.path.join(self.logs, "android-sign.log"))
         self.verify_apk(apk)
+        with open(os.path.join(self.dir, "android-job"), "w") as f:
+            f.write("%d\n" % job["id"])
         log("signed %s from job %s" % (apk_name, job["id"]))
 
     def check_subtree(self, rev):

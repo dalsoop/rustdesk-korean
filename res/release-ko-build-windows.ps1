@@ -35,19 +35,53 @@ $Run = Join-Path $Work "runs\$Commit"
 $Bridge = Join-Path $Run 'bridge'
 $Out = Join-Path $Run 'out'
 $TaskName = 'rdk-release-build'
-$Current = Join-Path $Work 'current-build'
+# The scheduled task is one per machine, so its owner (`<work>|<commit>`) and the start lock are too, whatever -Work is.
+$Global = Join-Path $env:ProgramData 'rdk-release-build'
+New-Item -ItemType Directory -Force -Path $Global, $Run | Out-Null
+$Current = Join-Path $Global 'owner'
+$Me = "$Work|$Commit"
+# A task that was just started can show Ready or Queued for a moment before Running: within this grace after
+# `start`, the build counts as running.
+$StartGraceSeconds = 300
+
+# Marker files are replaced whole (temporary file, then a rename), so a reader never sees half of one.
+function Write-Marker([string]$Path, [string]$Value) {
+    $tmp = "$Path.tmp"
+    [IO.File]::WriteAllText($tmp, $Value)
+    Move-Item -Force $tmp $Path
+}
+function Read-Marker([string]$Path) {
+    $v = Get-Content $Path -Raw -ErrorAction SilentlyContinue
+    if ($v) { $v.Trim() } else { '' }
+}
 
 function Get-RunState {
     $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-    $running = $task -and $task.State -eq 'Running'
-    $cur = if (Test-Path $Current) { (Get-Content $Current -Raw).Trim() } else { '' }
-    $exit = if (Test-Path "$Run\exit") { (Get-Content "$Run\exit" -Raw).Trim() } else { $null }
-    $state = if ($running -and $cur -eq $Commit) { 'running' } elseif ($null -ne $exit) { if ($exit -eq '0') { 'done' } else { 'failed' } } else { 'none' }
+    $active = $task -and ($task.State -eq 'Running' -or $task.State -eq 'Queued')
+    $cur = Read-Marker $Current
+    $exit = Read-Marker "$Run\exit"
+    $started = Read-Marker "$Run\started"
+    $fresh = $false
+    if ($started -and -not $exit) {
+        $fresh = ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - [long]$started) -lt $StartGraceSeconds
+    }
+    $mine = $cur -eq $Me
+    $state = if ($mine -and ($active -or $fresh)) { 'running' } elseif ($exit) { if ($exit -eq '0') { 'done' } else { 'failed' } } else { 'none' }
     $files = @()
-    if ($state -eq 'done') {
+    if ($state -eq 'done' -and (Test-Path $Out)) {
         $files = @(Get-ChildItem $Out -File | ForEach-Object { @{ name = $_.Name; size = $_.Length; sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() } })
     }
-    [ordered]@{ state = $state; commit = $Commit; exit = $exit; busy_with = $(if ($running -and $cur -ne $Commit) { $cur } else { $null }); files = $files }
+    $busy = $null
+    if (-not $mine -and $active) {
+        $busy = if ($cur) { $cur } else { 'a build without an owner record' }
+    } elseif (-not $mine -and $cur) {
+        $curWork, $curCommit = $cur -split '\|', 2
+        $curStarted = Read-Marker (Join-Path $curWork "runs\$curCommit\started")
+        $curExit = Read-Marker (Join-Path $curWork "runs\$curCommit\exit")
+        $curFresh = $curStarted -and -not $curExit -and (([DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - [long]$curStarted) -lt $StartGraceSeconds)
+        if ($active -or $curFresh) { $busy = $cur }
+    }
+    [ordered]@{ state = $state; commit = $Commit; exit = $(if ($exit) { $exit } else { $null }); busy_with = $busy; files = $files }
 }
 
 if ($Action -eq 'status') {
@@ -55,25 +89,37 @@ if ($Action -eq 'status') {
     exit 0
 }
 if ($Action -eq 'start') {
-    $st = Get-RunState
-    if ($st.busy_with) { Write-Output "busy with $($st.busy_with)"; exit 3 }
-    if ($st.state -eq 'running') { Write-Output 'already running'; exit 0 }
-    foreach ($f in @('build.ps1', 'bridge\bridge_generated.rs', 'bridge\bridge_generated.io.rs', 'bridge\generated_bridge.dart',
-                     'bridge\generated_bridge.freezed.dart', 'bridge\bridge_generated.h')) {
-        if (-not (Test-Path (Join-Path $Run $f))) { throw "missing $Run\$f" }
+    # Admission one at a time: the check and the hand-over to the task happen under an exclusive lock.
+    $lock = $null
+    for ($i = 0; -not $lock -and $i -lt 120; $i++) {
+        try { $lock = [IO.File]::Open((Join-Path $Global 'start.lock'), 'OpenOrCreate', 'ReadWrite', 'None') }
+        catch [IO.IOException] { Start-Sleep -Seconds 1 }
     }
-    Remove-Item "$Run\exit", "$Run\build.log" -ErrorAction SilentlyContinue
-    if (Test-Path $Out) { Remove-Item -Recurse -Force $Out }
-    Set-Content $Current $Commit
-    $pwsh = 'C:\Program Files\PowerShell\7\pwsh.exe'
-    $cmdline = "/c `"`"$pwsh`" -NoProfile -File `"$Run\build.ps1`" -Action build -Commit $Commit -Work `"$Work`" > `"$Run\build.log`" 2>&1`""
-    # Not $action: PowerShell names are case-insensitive, and $Action is the validated parameter.
-    $taskAction = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument $cmdline
-    $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType S4U -RunLevel Highest
-    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 8) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
-    Register-ScheduledTask -TaskName $TaskName -Action $taskAction -Principal $principal -Settings $settings -Force | Out-Null
-    Start-ScheduledTask -TaskName $TaskName
-    Write-Output "started $Commit"
+    if (-not $lock) { Write-Output 'another start holds the lock'; exit 3 }
+    try {
+        $st = Get-RunState
+        if ($st.busy_with) { Write-Output "busy with $($st.busy_with)"; exit 3 }
+        if ($st.state -eq 'running') { Write-Output 'already running'; exit 0 }
+        foreach ($f in @('build.ps1', 'bridge\bridge_generated.rs', 'bridge\bridge_generated.io.rs', 'bridge\generated_bridge.dart',
+                         'bridge\generated_bridge.freezed.dart', 'bridge\bridge_generated.h')) {
+            if (-not (Test-Path (Join-Path $Run $f))) { throw "missing $Run\$f" }
+        }
+        Remove-Item "$Run\exit", "$Run\build.log" -ErrorAction SilentlyContinue
+        if (Test-Path $Out) { Remove-Item -Recurse -Force $Out }
+        Write-Marker "$Run\started" ([string][DateTimeOffset]::UtcNow.ToUnixTimeSeconds())
+        Write-Marker $Current $Me
+        $pwsh = 'C:\Program Files\PowerShell\7\pwsh.exe'
+        $cmdline = "/c `"`"$pwsh`" -NoProfile -File `"$Run\build.ps1`" -Action build -Commit $Commit -Work `"$Work`" > `"$Run\build.log`" 2>&1`""
+        # Not $action: PowerShell names are case-insensitive, and $Action is the validated parameter.
+        $taskAction = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument $cmdline
+        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType S4U -RunLevel Highest
+        $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 8) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
+        Register-ScheduledTask -TaskName $TaskName -Action $taskAction -Principal $principal -Settings $settings -Force | Out-Null
+        Start-ScheduledTask -TaskName $TaskName
+        Write-Output "started $Commit"
+    } finally {
+        $lock.Close()
+    }
     exit 0
 }
 
@@ -83,7 +129,7 @@ trap {
     if ($Action -ne 'build') { break }
     Write-Output "FAILED: $($_.Exception.Message)"
     Write-Output $_.ScriptStackTrace
-    Set-Content "$Run\exit" '1'
+    Write-Marker "$Run\exit" '1'
     exit 1
 }
 
@@ -319,5 +365,5 @@ $view.GetType().InvokeMember('Close', 'InvokeMethod', $null, $view, $null) | Out
     host = $env:COMPUTERNAME
 } | ConvertTo-Json | Set-Content (Join-Path $Out 'build-info.json')
 Get-ChildItem $Out -File | ForEach-Object { "{0} {1} {2}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Length, $_.Name }
-Set-Content "$Run\exit" '0'
+Write-Marker "$Run\exit" '0'
 exit 0
