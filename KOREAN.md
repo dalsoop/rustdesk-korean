@@ -210,7 +210,7 @@ Tailscale is optional (from ko.18). The app shows the on-prem tab only when Tail
 - Sign-in on the public server (from ko.20): RustDesk's public server (`admin.rustdesk.com`) refuses account passwords, so with that API server the sign-in dialog shows only its third-party buttons (Google, GitHub, …) under "공용 서버는 무료 로그인이 필요합니다 · Google 등으로 로그인하세요"; with any other server it is unchanged. When the public server refuses a connection because nobody is signed in ("log in before connecting" / "Login required for public server"), the connection window explains it in Korean and offers "로그인", which opens the same dialog and connects again after the sign-in.
 - **온프레미스**: 프로필은 이 맥의 Tailscale 계정 프로필입니다(앱에 서버 주소나 키를 넣지 않습니다).
   - 켜진 망의 기기를 모두 카드로 보여 주고, RustDesk 직접 접속 포트(21118)가 열렸는지 `접속 가능`/`접속 불가`/`확인 중`으로 표시합니다.
-  - 카드를 누르면 그 기기의 지금 Tailscale IP 로 바로 접속합니다. 접속받는 쪽은 `direct-server=Y` 가 필요합니다. 우리 Mac 은 dotfiles, pop-os 는 host-infra 가 켭니다.
+  - 카드를 누르면 그 기기의 지금 Tailscale IP 로 바로 접속합니다. 접속받는 쪽은 `direct-server=Y` 가 필요합니다. 우리 Mac 은 dotfiles, gitlab1 은 host-infra 가 켭니다.
   - 저장된 접속 비밀번호(ko.25 부터): 그 Tailscale 주소의 비밀번호를 이 Mac 에 저장해 두면 카드를 눌렀을 때 비밀번호 창 없이 바로 들어갑니다. 저장은 `printf '%s\n' "$PASSWORD" | "/Applications/RustDesk (forked ranode).app/Contents/MacOS/RustDeskPublic" --save-peer-password <상대 Tailscale IPv4>` 로 하고(표준 입력으로만, root 로는 안 됨, 앱이 떠 있어도 됨), 성공하면 `Saved for <주소>.` 를 찍습니다. 비밀번호는 이 Mac 의 키로 암호화되어 이 앱의 설정 폴더(`RustDeskPublic_saved_peer_passwords.toml`)에만 남고, 화면·로그·명령줄에 나오지 않습니다. 저장된 비밀번호가 틀리면 평소처럼 "잘못된 비밀번호" 창이 뜹니다. 우리 Mac 에는 머신 설정이 Bitwarden 에서 바로 넣습니다.
   - 켜지지 않은 망을 고르면 전환 버튼과 경고를 보여 주고, 확인을 받은 뒤에 Tailscale 프로필을 바꿉니다.
   - 최근·즐겨찾기는 망 + 기기 이름으로 기억합니다.
@@ -227,7 +227,7 @@ Tailscale is optional (from ko.18). The app shows the on-prem tab only when Tail
 |---|---|---|
 | 리눅스 .deb | `1.5.0+ko9` (원본 `1.5.0` 보다 뒤로 정렬되어 apt 가 업그레이드로 봄) | `build.py` 의 `get_ko_release()` |
 | 윈도우 exe | 파일 버전 `1.5.0.6809` | Flutter 빌드 번호 |
-| 윈도우 msi | `1.5.0.6809` | `build-desktop-ko.yml` 이 빌드 번호를 `preprocess.py --revision-version` 으로 넘김 |
+| 윈도우 msi | `1.5.0.6809` | `res/release-ko-build-windows.ps1` passes the build number to `preprocess.py --revision-version` |
 | 안드로이드 | versionName `1.5.0-ko.9`, versionCode `8809`(arm64 분할 APK 라 Flutter 가 빌드 번호에 2000 을 더함) | `flutter/android/app/build.gradle` |
 | macOS | CFBundleShortVersionString `1.5.0`, CFBundleVersion `6809` | Flutter 빌드 번호 |
 | 정보 화면 | "버전: 1.5.0 (ko.9)" | `desktop_setting_page.dart` |
@@ -241,11 +241,11 @@ From 2026-11-22 the steps below run by themselves on the release Mac m5m1 once t
 2. macOS: build on the release Mac m5m1 (from ko.22; earlier releases were built on m5m2) and sign and notarize there with the Developer ID (V2Z46YY386) (bundle id `com.carriez.rustdesk` unchanged). Build `RUSTDESK_FLAVOR=public` from the same commit so RustDesk Public ships with it. Sign, notarize and zip with `res/osx-sign-notarize.sh <built .app> <name inside the zip> <zip>`.
    - 본 앱: `RustDesk.app` → `rustdesk-1.5.0-ko.N-macos-aarch64.zip`
    - Public: `RustDeskPublic.app` → name inside the zip `RustDesk (forked ranode).app` (until ko.16 `RustDesk Public.app`), `rustdesk-public-1.5.0-ko.N-macos-aarch64.zip`
-3. 윈도우·리눅스: GitHub Actions `Build desktop (Korean fork, Windows/Linux x64)` 가 기본 브랜치 push 에서 돕니다.
+3. Windows and Linux (from 2026-11-23): the Linux deb is built by the `rustdesk:linux-x64` job of `gujoai/apps/upstream-mono`'s GitLab CI, and the Windows exe and msi by `res/release-ko-build-windows.ps1` on the Windows build VM; the release driver collects both (docs/operations.md "Release ko.N").
 4. 안드로이드: gitlab `gujoai/apps/upstream-mono` 에 `rustdesk/` subtree 를 새 머리로 맞추는 MR 을 내면 CI 가 서명 없는 APK(`apk/rustdesk-1.5.0-ko.N-<커밋>-aarch64-unsigned.apk`)를 만듭니다. CI 러너는 서명 키를 갖지 않습니다. 그 아티팩트를 m5m1 에 받아 `res/android-sign-release.sh <unsigned.apk> rustdesk-1.5.0-ko.N-aarch64.apk` 로 서명합니다. 키는 Bitwarden Secrets Manager `android-signing` 프로젝트에서 `bwsx` 로 이 스크립트에만 들어가고, 서명 인증서 SHA-256 이 기존 APK 와 같지 않으면 실패합니다(`43:7D:FD:91:…:AD:7D`). 결과 `.apk` 옆에 `.sha256` 을 씁니다. 도구는 m5m1 의 `~/work/sdk`(build-tools 34.0.0, JDK 17)입니다.
 5. GitHub 릴리스 `1.5.0-ko.N` 에 네 플랫폼 파일과 RustDesk Public zip, 각 `.sha256` 을 올립니다.
    - 우리 Mac 설치: dotfiles `scripts/adhoc/install-rustdesk-fork.sh <zip> <sha256>`(본 앱), `--public <zip> <sha256>`(Public).
-6. pop-os 는 host-infra 의 `versions.rustdesk`(`1.5.0+koN`), sha256, 주소를 바꾸는 MR 로 올립니다.
+6. gitlab1 은 host-infra 의 `versions.rustdesk`(`1.5.0+koN`), sha256, 주소를 바꾸는 MR 로 올립니다.
 
 ## 라이선스
 

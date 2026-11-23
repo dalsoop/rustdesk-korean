@@ -19,7 +19,7 @@ the components below on top of it.
 | ranode core | `src/public_flavor.rs`, gates in `src/common.rs`, `src/platform/macos.rs`, `src/core_main.rs` | App name `RustDeskPublic`, pinned options plus the per-Mac incoming policy, `--set-permanent-password` / `--set-incoming-policy`, no service install, one-time cleanup, LAN discovery probe | `hbb_common::config` |
 | ranode home | `flutter/lib/desktop/pages/public_home.dart`, `public_onboarding.dart`, `flutter/lib/common/public_onprem.dart`, `public_login.dart`, `tailscale_range.dart` | On-prem tab (Tailscale devices) and internet tab (public server), first-run guide | Tailscale module, ranode core via FFI |
 | Tailscale module | `flutter/lib/common/tailscale.dart` | Runs the local `tailscale` CLI (status, profiles, switch), probes TCP 21118 on peers | the Tailscale app / CLI on the same Mac |
-| Release tooling | `res/osx-sign-notarize.sh`, `res/android-sign-release.sh`, `.github/workflows/build-desktop-ko.yml`, `flutter-unit-test.yml` | Sign/notarize macOS, sign Android, build Windows/Linux in CI | owner's signing keys, GitHub Actions |
+| Release tooling | `res/release-ko.py`, `res/release-ko-build-macos.sh`, `res/release-ko-build-windows.ps1`, `res/osx-sign-notarize.sh`, `res/android-sign-release.sh`, `flutter-unit-test.yml` | Release driver; build macOS (m5m1) and Windows (win-build); sign/notarize macOS, sign Android | owner's signing keys, the upstream-mono GitLab CI (Linux, Android) |
 
 Dependency direction: fork Flutter code → FFI (`mainIsPublicFlavor`, `mainPublicProbeRustdesk`) → fork
 Rust modules → upstream. Upstream code calls fork code only through one-line hooks.
@@ -75,4 +75,6 @@ them can listen at a time.
 - ranode does not answer LAN discovery on UDP 21119 (upstream starts that listener only for an
   "installed" app), so other Macs find a ranode-only Mac through TCP 21118 alone.
 - The Tailscale module never talks to Tailscale's servers or LocalAPI; it only runs the local CLI.
-- Release keys never enter GitHub Actions; CI builds Windows/Linux unsigned and runs Flutter tests.
+- Release keys never enter GitHub Actions or any CI; GitHub Actions runs the fork's tests, the
+  upstream-mono GitLab CI builds Linux and Android unsigned, and the Windows build VM builds Windows
+  unsigned.

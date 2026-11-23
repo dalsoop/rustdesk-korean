@@ -71,8 +71,9 @@ tests (soft keyboard / Korean)" when their paths change; both must be green):
   `tailscale_test`, `public_onprem_test`; CI).
 After merge, before release (CI on push to the default branch):
 
-- "Build desktop (Korean fork, Windows/Linux x64)" is green for the release commit, and
-  "flutter unit tests (soft keyboard / Korean)" is green when its paths changed.
+- "flutter unit tests (soft keyboard / Korean)" is green when its paths changed. The Windows and
+  Linux release builds are made by the release driver (docs/operations.md "Release ko.N"), not by a
+  workflow of this repository.
 - A change to ranode or the Tailscale module is also checked live on a Mac launched from Finder
   (not from a terminal) before release.
 
