@@ -680,8 +680,10 @@ class Release:
     def um_checkout(self):
         if not os.path.isdir(os.path.join(self.um, ".git")):
             run(["git", "clone", "-q", "--no-checkout", UM_GIT, self.um], timeout=3600)
-        # An existing clone follows the configured URL too (the driver fetches from and pushes to its origin).
+        # An existing clone follows the configured URL too (the driver fetches from and pushes to its origin), for
+        # pushes as well, so a push URL left from an older setup cannot send the release branch elsewhere.
         git(self.um, "remote", "set-url", "origin", UM_GIT)
+        git(self.um, "remote", "set-url", "--push", "origin", UM_GIT)
         git(self.um, "fetch", "-q", "--prune", "origin", timeout=1800)
 
     def um_split(self):
