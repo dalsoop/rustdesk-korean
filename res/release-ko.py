@@ -72,7 +72,10 @@ REPO = "dalsoop/rustdesk-korean"
 BRANCH = "feat/sync-upstream-1.5.0"
 FORK_HTTPS = "https://github.com/dalsoop/rustdesk-korean.git"
 UM_PROJECT = "gujoai/apps/upstream-mono"
-UM_SSH = "git@gitlab.com:gujoai/apps/upstream-mono.git"
+# The GitLab that hosts upstream-mono: the API host for glab and the git URL of the upstream-mono clone. A Mac whose
+# git reaches that GitLab another way (an SSH remote, a url.*.insteadOf) sets RDK_UPSTREAM_MONO_GIT.
+GITLAB_HOST = os.environ.get("RDK_GITLAB_HOST", "gitlab.ranode.external.kr")
+UM_GIT = os.environ.get("RDK_UPSTREAM_MONO_GIT", "https://%s/%s.git" % (GITLAB_HOST, UM_PROJECT))
 ANDROID_JOB = "rustdesk:android-arm64"
 LINUX_JOB = "rustdesk:linux-x64"
 BUILD_HOST = "m5m1"
@@ -246,7 +249,7 @@ def gh_api(path, method="GET", check=True):
 
 
 def gl_api(path, method="GET", out_file=None, fields=None):
-    cmd = ["glab", "api", "--hostname", "gitlab.com", "-X", method, path]
+    cmd = ["glab", "api", "--hostname", GITLAB_HOST, "-X", method, path]
     for k, v in (fields or {}).items():
         cmd += ["--raw-field", "%s=%s" % (k, v)]
     if out_file:
@@ -279,7 +282,8 @@ GL_FIELDS = ("id", "iid", "sha", "name", "status", "artifacts", "artifacts_expir
 
 def gitlab_manager(args, cwd):
     """Runs gitlab-manager; a failure reports the exit code only (its output can echo GitLab objects)."""
-    p = run(["gitlab-manager"] + args, cwd=cwd, check=False, timeout=600)
+    # gitlab-manager hands its glab calls the host through GITLAB_HOST; pin it so an inherited value cannot redirect them.
+    p = run(["gitlab-manager"] + args, cwd=cwd, check=False, timeout=600, env_extra={"GITLAB_HOST": GITLAB_HOST})
     if p.returncode != 0:
         raise Failed("gitlab-manager %s: exit %d (output not shown)" % (" ".join(args[:2]), p.returncode))
     return p.stdout
@@ -676,7 +680,11 @@ class Release:
 
     def um_checkout(self):
         if not os.path.isdir(os.path.join(self.um, ".git")):
-            run(["git", "clone", "-q", "--no-checkout", UM_SSH, self.um], timeout=3600)
+            run(["git", "clone", "-q", "--no-checkout", UM_GIT, self.um], timeout=3600)
+        # An existing clone follows the configured URL too (the driver fetches from and pushes to its origin), for
+        # pushes as well, so a push URL left from an older setup cannot send the release branch elsewhere.
+        git(self.um, "remote", "set-url", "origin", UM_GIT)
+        git(self.um, "remote", "set-url", "--push", "origin", UM_GIT)
         git(self.um, "fetch", "-q", "--prune", "origin", timeout=1800)
 
     def um_split(self):
