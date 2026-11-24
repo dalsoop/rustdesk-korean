@@ -282,7 +282,8 @@ GL_FIELDS = ("id", "iid", "sha", "name", "status", "artifacts", "artifacts_expir
 
 def gitlab_manager(args, cwd):
     """Runs gitlab-manager; a failure reports the exit code only (its output can echo GitLab objects)."""
-    p = run(["gitlab-manager"] + args, cwd=cwd, check=False, timeout=600)
+    # gitlab-manager hands its glab calls the host through GITLAB_HOST; pin it so an inherited value cannot redirect them.
+    p = run(["gitlab-manager"] + args, cwd=cwd, check=False, timeout=600, env_extra={"GITLAB_HOST": GITLAB_HOST})
     if p.returncode != 0:
         raise Failed("gitlab-manager %s: exit %d (output not shown)" % (" ".join(args[:2]), p.returncode))
     return p.stdout
