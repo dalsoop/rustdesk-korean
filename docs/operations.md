@@ -26,6 +26,14 @@ This file is written in English only.
 
   Both scripts create their private temp folder under `~/tmp`.
 
+The release driver `res/release-ko.py` reads upstream-mono's pipelines, jobs and merge requests with `glab api`
+and keeps a clone of upstream-mono (it fetches from and pushes to its `origin`, which the driver sets on every run):
+
+| Variable | Role | Default |
+|---|---|---|
+| `RDK_GITLAB_HOST` | GitLab host for `glab api --hostname` | `gitlab.ranode.external.kr` |
+| `RDK_UPSTREAM_MONO_GIT` | git URL of upstream-mono (needs read and branch-push access on the Mac) | `https://<RDK_GITLAB_HOST>/gujoai/apps/upstream-mono.git` |
+
 ## Setup
 
 ```sh
