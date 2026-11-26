@@ -2,6 +2,19 @@ This file is written in English only.
 
 # Engineering notes
 
+## One Caps Lock press arrives as two key-downs (fixed in ko.26)
+
+- Symptom: from a controlling Mac whose "Use Caps Lock to switch to and from ABC" is on, Caps Lock
+  does not change the remote Mac's input source. The controlling Mac's log shows "Local 한/영 key
+  Caps Lock sent to macos peer" twice per press, 7 to 15 ms apart, and the controlled Mac's log
+  "Remote 한/영 key Keycode(79): switched the input source (x2)" (ranode ko.20 on macOS 26.5 through
+  the Flutter key path, no Input Monitoring, to the main app ko.19 on macOS 27, 2026-11-26).
+- Cause: macOS reports that press as two Caps Lock key-downs; each became a 한/영 tap, so the peer
+  switched twice and ended where it started.
+- Response: `mac_key_action` treats Caps Lock key-downs less than `CAPS_LOCK_SAME_PRESS` (80 ms)
+  apart as one press (test `caps_lock_double_key_down_of_one_press_toggles_once`). A shortcut
+  route (Caps Lock mapped to F18) was never affected.
+
 ## Tailscale CLI run from a GUI app fails (fixed in ko.22)
 
 - Symptom: ranode launched from Finder/Dock says "Tailscale이 꺼져 있습니다" (or not responding)

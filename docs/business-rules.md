@@ -40,6 +40,9 @@ own whenever the OSes differ, and also Mac → Mac:
   is on, the controlling Mac turns its own previous/next input-source shortcuts off and turns them
   back on when focus leaves or the window closes; after a crash they are restored when a remote
   window next opens. This needs no Input Monitoring permission.
+- Caps Lock as the local 한/영 key (macOS "Use Caps Lock to switch to and from ABC" on) toggles the
+  peer once per press: Caps Lock key-downs less than 80 ms apart (tunable,
+  `CAPS_LOCK_SAME_PRESS` in `src/hangul_key.rs`) are one press (from ko.26).
 
 ## 한/영 on a controlled Mac
 

@@ -20,6 +20,7 @@
 use base::message_proto::{ControlKey, KeyEvent, KeyboardMode};
 use rdev::{Event, EventType};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Os {
@@ -418,7 +419,16 @@ struct KeyState<E> {
     globe: Globe<E>,
     /// A held-back 🌐 key-down to send before the current key.
     to_send: Option<E>,
+    /// When Caps Lock as 한/영 last toggled the peer.
+    last_caps_lock_tap: Option<Instant>,
 }
+
+/// Caps Lock key-downs closer together than this are one press. With "Use the
+/// Caps Lock key to switch to and from ABC" on, macOS reports one press as two
+/// Caps Lock key-downs a few milliseconds apart (seen 7 to 15 ms, Flutter key
+/// path, ranode ko.20 on macOS 26.5), which toggled the peer twice: no change.
+/// A person cannot press Caps Lock twice this fast. Tunable.
+const CAPS_LOCK_SAME_PRESS: Duration = Duration::from_millis(80);
 
 impl<E> KeyState<E> {
     const fn new() -> Self {
@@ -426,6 +436,7 @@ impl<E> KeyState<E> {
             held: Vec::new(),
             globe: Globe::Idle,
             to_send: None,
+            last_caps_lock_tap: None,
         }
     }
 
@@ -478,6 +489,7 @@ fn mac_key_action<E>(
     down: bool,
     mods: Mods,
     event: E,
+    at: Instant,
 ) -> MacKeyAction {
     if keycode == MAC_KVK_FUNCTION && keys.globe {
         return globe_action(&mut state.globe, down, mods, event);
@@ -490,12 +502,18 @@ fn mac_key_action<E>(
     if keycode == MAC_KVK_CAPS_LOCK && keys.caps_lock {
         // Caps Lock may come as a key-down or a key-up per press; the Flutter
         // key path adds a synthesized key-up to each key-down. A caller that
-        // gets lone key-ups turns them into key-downs.
-        return if down {
-            MacKeyAction::Tap
-        } else {
-            MacKeyAction::Swallow
-        };
+        // gets lone key-ups turns them into key-downs. A second key-down within
+        // CAPS_LOCK_SAME_PRESS is the same press and is swallowed.
+        if !down {
+            return MacKeyAction::Swallow;
+        }
+        if let Some(last) = state.last_caps_lock_tap {
+            if at.saturating_duration_since(last) < CAPS_LOCK_SAME_PRESS {
+                return MacKeyAction::Swallow;
+            }
+        }
+        state.last_caps_lock_tap = Some(at);
+        return MacKeyAction::Tap;
     }
     match chord_action(&keys.chords, &mut state.held, keycode, down, mods) {
         ChordAction::Pass => MacKeyAction::Pass,
@@ -655,6 +673,7 @@ pub fn to_peer_hangul_key(
             down,
             mods,
             event: event.clone(),
+            at: Instant::now(),
         };
         let mut state = KEY_STATE.lock().unwrap();
         return mac_key_events(
@@ -730,6 +749,8 @@ struct KeyInput<E> {
     /// Modifiers held besides the key itself.
     mods: Mods,
     event: E,
+    /// When the event was handled.
+    at: Instant,
 }
 
 /// The key events to send for a Mac's key event, or `None` to send it as usual:
@@ -752,8 +773,9 @@ fn mac_key_events<E>(
         down,
         mods,
         event,
+        at,
     } = input;
-    let toggles: &[bool] = match mac_key_action(keys, state, keycode, down, mods, event) {
+    let toggles: &[bool] = match mac_key_action(keys, state, keycode, down, mods, event, at) {
         MacKeyAction::Pass => return None,
         MacKeyAction::Swallow => return Some(Vec::new()),
         MacKeyAction::Toggle(true) => &[true],
@@ -1247,6 +1269,9 @@ mod tests {
         enabled: bool,
         keys: LocalHangulKeys,
         state: KeyState<u32>,
+        /// The test clock: each key event comes `step` after the previous one.
+        clock: Instant,
+        step: Duration,
     }
 
     impl Session {
@@ -1256,6 +1281,8 @@ mod tests {
                 enabled: true,
                 keys,
                 state: KeyState::new(),
+                clock: Instant::now(),
+                step: Duration::from_millis(500),
             }
         }
 
@@ -1267,11 +1294,13 @@ mod tests {
         ) -> (Option<Vec<(bool, u32)>>, Option<u32>) {
             let mut key_event = KeyEvent::new();
             key_event.mode = KeyboardMode::Map.into();
+            self.clock += self.step;
             let input = KeyInput {
                 keycode,
                 down,
                 mods,
                 event: keycode,
+                at: self.clock,
             };
             let sent = mac_key_events(
                 self.peer,
@@ -1325,6 +1354,7 @@ mod tests {
             down: false,
             mods: NONE,
             event: GLOBE,
+            at: Instant::now(),
         };
         let sent = mac_key_events(
             "windows",
@@ -1417,6 +1447,39 @@ mod tests {
         s.press(GLOBE);
         assert_eq!(s.press(CAPS), (tap(), Some(GLOBE)));
         assert_eq!(s.release(GLOBE), (None, None));
+    }
+
+    #[test]
+    fn caps_lock_double_key_down_of_one_press_toggles_once() {
+        // macOS with "Use the Caps Lock key to switch to and from ABC" reports
+        // one press as two key-downs about 7 ms apart (ranode ko.20 log).
+        let mut s = Session::new("macos", all_keys());
+        let mac_tap = Some(vec![(true, 79), (false, 79)]);
+        s.step = Duration::from_millis(7);
+        assert_eq!(s.press(CAPS).0, mac_tap);
+        assert_eq!(s.press(CAPS), (nothing(), None));
+        assert_eq!(s.release(CAPS), (nothing(), None));
+        // The next real press, a person's pace later, toggles again.
+        s.step = Duration::from_millis(300);
+        assert_eq!(s.press(CAPS).0, mac_tap);
+        s.step = Duration::from_millis(15);
+        assert_eq!(s.press(CAPS), (nothing(), None));
+        // The window counts from the last tap: 95 ms after it is a new press.
+        s.step = CAPS_LOCK_SAME_PRESS;
+        assert_eq!(s.press(CAPS).0, mac_tap);
+        // Just under the window after a tap is the same press.
+        s.step = CAPS_LOCK_SAME_PRESS - Duration::from_millis(1);
+        assert_eq!(s.press(CAPS), (nothing(), None));
+        // Exactly the window after a tap is a new press.
+        let mut s = Session::new("macos", all_keys());
+        s.press(CAPS);
+        s.step = CAPS_LOCK_SAME_PRESS;
+        assert_eq!(s.press(CAPS).0, mac_tap);
+        // Other keys and chords are not held back by the window.
+        let mut s = Session::new("macos", all_keys());
+        s.step = Duration::from_millis(1);
+        assert_eq!(s.press(CAPS).0, mac_tap);
+        assert_eq!(s.press(KEY_E), (None, None));
     }
 
     #[test]
