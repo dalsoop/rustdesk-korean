@@ -17,6 +17,12 @@ This file is written in English only.
 
 ## Merged, not released
 
+- ko.26 (`version: 1.5.0+6826`): Caps Lock as the local 한/영 key on a controlling Mac toggles the
+  peer once per press (two key-downs within 80 ms are one press; engineering note "One Caps Lock
+  press arrives as two key-downs"). Rust: the new `hangul_key` test in CI (`fork-rust-tests.yml`).
+  Live check after the machine-setup install: from a Mac with "Caps Lock switches to ABC" on, one
+  "sent" line per press on the controlling Mac and one "switched" line on the controlled Mac.
+
 - ko.25 (`version: 1.5.0+6825`): ranode keeps each own device's access password, encrypted on the
   Mac, and the on-prem card connects with it (`--save-peer-password`, decision 0010). Released by
   the watch job after the merge; the live check (card click without a password prompt) follows the
