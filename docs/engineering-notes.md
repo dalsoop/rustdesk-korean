@@ -2,6 +2,29 @@ This file is written in English only.
 
 # Engineering notes
 
+## The Fn restore event opened Dictation (fixed in ko.27)
+
+- Symptom: on a Mac controlled through RustDesk, two 한/영 presses close together opened the macOS
+  Dictation prompt (unified log on two company Mac Studios, 2026-11-26 and 2026-11-27, about one
+  second after an input-source switch; the machine setup turned the Dictation shortcut off as a
+  stopgap, its decision 0040).
+- Cause: `MacPostHotKey` ended each switch with a `kCGEventFlagsChanged` event whose keycode was
+  `kVK_Function` to clear the SecondaryFn left by F18. A flags-changed event names a modifier key, so
+  macOS took it as an Fn press; two switches were "Fn pressed twice", the default Dictation shortcut.
+- Response: `MacHotKeyEvents` lists the posted events, the key-down with the shortcut's flags and
+  the key-up with `MacFlagsAfterHotKey`'s restored state; the key-up's flags clear SecondaryFn and
+  nothing else is posted (tests `a_switch_posts_no_fn_key_event`,
+  `the_key_up_keeps_a_physically_held_fn`).
+- Rejected: a flags-changed restore with another keycode (still a modifier press to macOS); F18
+  without SecondaryFn (the window server does not match an F-key shortcut without it).
+
+## Caps Lock unreadable at the first focus (fixed in ko.27)
+
+`MacReadCapsLockSwitch` and `MacReadFnUsageType` answer from a cache filled on the main queue; the
+first call off it returned -1, so at a remote window's first focus Caps Lock (and 🌐) did not count
+as 한/영 ("unreadable settings: caps-lock-switch" in the log). `main_init_input_source` now reads
+both once when the window opens, before it can take the keyboard.
+
 ## One Caps Lock press arrives as two key-downs (fixed in ko.26)
 
 - Symptom: from a controlling Mac whose "Use Caps Lock to switch to and from ABC" is on, Caps Lock
@@ -58,6 +81,7 @@ lookup appends them explicitly. Any new external CLI call from Flutter needs the
   when that shortcut is off. Reading the TIS 한/영 settings must happen on the main queue (fixed ko.12).
 - Trap: after a synthesized F18+Fn the Fn flag stayed set for later keys; `MacFlagsAfterHotKey`
   clears flags the shortcut added unless the key is physically held (tests in `platform::macos`).
+  From ko.27 those flags ride on the shortcut's key-up, never on a separate Fn event (next entry).
 
 ## The main app's `--server` agent must restart on any exit
 

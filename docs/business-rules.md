@@ -51,7 +51,9 @@ Option `enable-input-source-toggle`, default **on** (turned off only with
 
 - Arriving F18, Hangul (legacy mode) or LANG1 (Mac keycode 104) is not injected. Instead the Mac's
   own "previous input source" shortcut is posted at HID level, so the front app switches in key
-  order and the next typed character already uses the new source.
+  order and the next typed character already uses the new source. Exactly two events are posted, the
+  shortcut's key-down and key-up; the key-up carries the restored modifier state, and no Fn (or other
+  modifier) key event is posted (from ko.27).
 - If that shortcut is off (or paused by this Mac's own remote window), the input source is switched
   directly through TIS: from a Korean source to ABC, from any other source to the first enabled
   Korean source. This direct path may apply one key late in the front app.
