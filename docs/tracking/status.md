@@ -17,6 +17,15 @@ This file is written in English only.
 
 ## Merged, not released
 
+- ko.27 (`version: 1.5.0+6827`): the controlled Mac's 한/영 switch posts no Fn key event (two quick
+  presses opened Dictation), and the controlling Mac reads its Caps Lock and 🌐 settings when a remote
+  window opens (engineering notes "The Fn restore event opened Dictation", "Caps Lock unreadable at
+  the first focus"). Checks: fork Rust tests in CI; `macos.mm` compiled with clang on a company Mac
+  and `MacHotKeyEvents` run there by a standalone test (F18+Fn, ⌃Space, ⌃⌥Space: two key events, no
+  keycode 63, key-up flags restored); the new `platform::macos` tests were not run (no Mac with the Rust
+  build setup was reachable). Live check after the machine-setup install: one "switched" line per press and no Fn
+  left in the HID flags after two quick presses.
+
 - ko.26 (`version: 1.5.0+6826`): Caps Lock as the local 한/영 key on a controlling Mac toggles the
   peer once per press (two key-downs within 80 ms are one press; engineering note "One Caps Lock
   press arrives as two key-downs"). Rust: the new `hangul_key` test in CI (`fork-rust-tests.yml`).

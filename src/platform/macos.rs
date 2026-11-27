@@ -2082,8 +2082,24 @@ fn get_bundle_id() -> Option<String> {
 
 #[cfg(test)]
 mod hotkey_flags_tests {
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    struct MacHotKeyEvent {
+        keycode: u16,
+        down: bool,
+        flags: u64,
+    }
+
     extern "C" {
         fn MacFlagsAfterHotKey(before: u64, hotkey_flags: u64, held: u64) -> u64;
+        fn MacHotKeyEvents(
+            keycode: u16,
+            flags: u64,
+            before: u64,
+            held: u64,
+            out: *mut MacHotKeyEvent,
+            max: i32,
+        ) -> i32;
     }
 
     const BASE: u64 = 0x2000_0000;
@@ -2123,6 +2139,42 @@ mod hotkey_flags_tests {
     #[test]
     fn other_modifiers_are_put_back() {
         assert_eq!(after(BASE | SHIFT, FN, 0), BASE | SHIFT);
+    }
+
+    fn hotkey_events(keycode: u16, flags: u64, before: u64, held: u64) -> Vec<MacHotKeyEvent> {
+        let mut out = [MacHotKeyEvent::default(); 4];
+        let n = unsafe { MacHotKeyEvents(keycode, flags, before, held, out.as_mut_ptr(), 4) };
+        out[..n as usize].to_vec()
+    }
+
+    #[test]
+    fn a_switch_posts_no_fn_key_event() {
+        // A flags-changed event for the Fn key after F18 counted as an Fn
+        // press, so two quick 한/영 switches opened Dictation.
+        const KVK_F18: u16 = 79;
+        const KVK_SPACE: u16 = 49;
+        const OPTION: u64 = 1 << 19;
+        let shortcuts = [
+            (KVK_F18, FN),
+            (KVK_SPACE, CONTROL),
+            (KVK_SPACE, CONTROL | OPTION),
+        ];
+        for (keycode, flags) in shortcuts {
+            let events = hotkey_events(keycode, flags, BASE, 0);
+            assert_eq!(
+                events,
+                [
+                    MacHotKeyEvent { keycode, down: true, flags },
+                    MacHotKeyEvent { keycode, down: false, flags: BASE },
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn the_key_up_keeps_a_physically_held_fn() {
+        let events = hotkey_events(79, FN, BASE | FN, FN);
+        assert_eq!(events[1].flags, BASE | FN);
     }
 }
 

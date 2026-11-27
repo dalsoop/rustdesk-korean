@@ -239,6 +239,17 @@ fn read_mac_key_settings() -> crate::hangul_key::MacKeySettings {
     }
 }
 
+/// Reads the Caps Lock and 🌐 settings once so their main-queue refresh runs
+/// before a remote window first takes the keyboard. Until that refresh the
+/// cached values are "unreadable", and Caps Lock did not count as 한/영 at the
+/// first focus.
+pub fn prime_mac_key_settings() {
+    unsafe {
+        MacReadCapsLockSwitch();
+        MacReadFnUsageType();
+    }
+}
+
 /// Whether the Caps Lock key is physically down now (HID state).
 pub fn is_caps_lock_key_down() -> bool {
     unsafe { MacIsCapsLockKeyDown() }

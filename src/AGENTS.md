@@ -6,13 +6,14 @@ This file is written in English only.
 Fork modules (registered in `lib.rs` and `platform/mod.rs`): `hangul_key.rs` (peer 한/영 mapping), `public_flavor.rs` (ranode identity, pinned
 options and per-Mac incoming policy, ranode CLI commands, cleanup, discovery probe), `fork_update.rs` (fork release check; std-only because
 `build.rs` includes it), `platform/macos_input_source.rs` and the fork parts of `platform/macos.mm`
-(TIS switch, HID shortcut post, local hotkey pause, Fn flag fix). Hooks in upstream files:
+(TIS switch, HID shortcut post whose key-up restores the modifier flags with no Fn event, local hotkey
+pause, settings priming at window init). Hooks in upstream files:
 `keyboard.rs`, `server/input_service.rs`, `updater.rs`, `common.rs` (`is_rustdesk`,
 `is_custom_client`), `core_main.rs` (`public_flavor::init()` first), `platform/macos.rs` (service
 refusal, hotkey tests), `flutter_ffi.rs` (`main_is_public_flavor`, `main_public_probe_rustdesk`,
 `main_public_direct_port_busy`,
 `session_set_remote_keyboard_active`, `main_init_input_source` which restores the Mac's hotkeys
-after a crash, the `local-hangul-keys-status` option), `flutter.rs` (`session_add`:
+after a crash and primes the Caps Lock and 🌐 settings, the `local-hangul-keys-status` option), `flutter.rs` (`session_add`:
 `public_flavor::saved_peer_password` as the preset password, and `remember` off for such a
 session), `client.rs` (`get_conn_token`: no token when `public_flavor::has_saved_peer_password`),
 `server/connection.rs` (`on_open`:

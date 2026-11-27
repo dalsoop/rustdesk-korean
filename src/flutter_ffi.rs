@@ -2354,6 +2354,8 @@ pub fn main_is_installed() -> SyncReturn<bool> {
 pub fn main_init_input_source() -> SyncReturn<()> {
     #[cfg(target_os = "macos")]
     crate::platform::macos_input_source::restore_hotkeys_left_suspended();
+    #[cfg(target_os = "macos")]
+    crate::platform::macos_input_source::prime_mac_key_settings();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     crate::keyboard::input_source::init_input_source();
     SyncReturn(())
